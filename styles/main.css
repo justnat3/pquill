@@ -2,10 +2,12 @@
  * here is the viewport settings
  */
 .bod {
-    background-color:#f5f1e8;
-    color: #082026;
+    background-color:#fdf6e3;
+    color: #1e2527;
     margin-left: 16px;
-margin-top: 16px;
+    margin-top: 16px;
+    height: 100vh;
+    width: 100vw;
 }
 
 /* 
@@ -13,7 +15,8 @@ margin-top: 16px;
  */
 .string-body {
     white-space: normal;
-    margin-bottom: 15px;
+    margin-bottom: 16px;
+    margin-left: 16px;
     word-wrap: break-word;
     
     display: flex;
@@ -101,4 +104,12 @@ margin-top: 16px;
 
     font-weight: 400;
     font-size: 20px;
+}
+
+.list-def {
+    margin-left: 16px;
+}
+
+.list-item {
+
 }

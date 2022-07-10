@@ -37,11 +37,11 @@
 # I also think that we should have a way of determining if something is actually a keyword
 # like "\options: {}" having a escape char before the keyword so its not parsed wrong
 
-# TODO: Styles plan 
-    # we have a defined set of css classes
-    # we have a init for the static site generator to make sure all the paths are there
-    # based on the classes we can define colors
-    #   the sites should for the most part be in the same format
+# TODO: Styles plan
+# we have a defined set of css classes
+# we have a init for the static site generator to make sure all the paths are there
+# based on the classes we can define colors
+#   the sites should for the most part be in the same format
 
 
 from dataclasses import dataclass, field
@@ -49,10 +49,12 @@ from enum import Enum, auto
 from typing import Union
 import json
 
+
 class TokenType(Enum):
     thematic_break = auto()  # --- *** ___
+    list_item = auto()
     insecure_char = auto()  # replacement char -> U+FFFD
-    identifier = auto() # \options: {}
+    identifier = auto()  # \options: {}
     comment = auto()  # //
     entity_char = auto()  # &nbsp
     atx_heading = auto()  # NODE("#")
@@ -63,13 +65,15 @@ class TokenType(Enum):
     # we do not current support html this could be "unsafe"
     # block = auto()  # <li> <ul> => NODE("-")
 
-class PageParserError(object):
-    """_summary_
 
-    Args:
-        message -- Explaining what error the
-        position -- position of the cursor
-        line -- line where the error occurred
+class PageParserError(object):
+    """
+        A parser error type
+
+    args
+        message     Explaining what error the
+        position    position of the cursor
+        line        line where the error occurred
 
     """
 
@@ -82,6 +86,18 @@ class PageParserError(object):
 
 
 class Token(object):
+    """
+    Defining what a parser token looks like
+
+    args
+        type    TokenType
+        chars   String representing the value of the token
+        size    Mostly used to describe the detail of a token
+                for example
+                    atx_heading may have a size of 3 (h3)
+                    or list_item token might have the value 3
+    """
+
     def __init__(self, _type: TokenType, chars: str, size: int):
         self.type = _type
         self.chars = chars
@@ -95,20 +111,28 @@ class Token(object):
 
 
 class PageParser(object):
+    """
+    our global parser object
+
+    lookahead_ptr   a pointer to look ahead of the cursor temporarily
+    _has_errors     defining what the parser ran into during scans
+    file_buff       chars from the source file
+    column          what column are we on in a line
+    tokens          list of tokens we have collected in scans
+    cursor          where we are in the source file
+    line            what line are we on, primarily used with column
+    fd              a hidden file descriptor for our source file
+    """
+
     def __init__(self, file_buff: str):
-
-        # NOTE: not sure if I want to keep these around
-        # self.readback_ptr = -1  # a pointer behind of the cursor
-
-        self.file_buff = file_buff.read()  # input file_buff chars
-        self.lookahead_ptr = 0  # a pointer ahead of the cursor
-        self._has_errors = []  # list of errors
-        self.cursor = 0  # ptr to the character in the file_buff
-        self.column = 0  # what colum we are on in a line
-        self.tokens = []  # list of page tokens
-        #self.page = []  # strings that make up the final document
-        self.fd = file_buff  # hidden file_buff descriptor
-        self.line = 0  # what line we are on, we can use this with column
+        self.file_buff = file_buff.read()
+        self.lookahead_ptr = 0
+        self._has_errors = []
+        self.fd = file_buff
+        self.tokens = []
+        self.cursor = 0
+        self.column = 0
+        self.line = 0
 
     def __str__(self):
         """creating the final page"""
@@ -135,7 +159,7 @@ class PageParser(object):
 
         attrs
             msg message to say what the error is, and if we can continue
-        
+
         returns
             PageParserError(class)
         """
@@ -160,7 +184,7 @@ class PageParser(object):
             To add an option to the begining of the token buffer
 
         examples
-            o   title        
+            o   title
             c   a code block (gist embed)
 
         returns
@@ -175,14 +199,14 @@ class PageParser(object):
         option = json.loads(_json)
 
         # TODO: find a way to have valid and invalid keys
-        #if option not in valid_options:
-            #raise Exception(f"invalid option: {option.keys()}")
+        # if option not in valid_options:
+        # raise Exception(f"invalid option: {option.keys()}")
 
         self.add_token("identifier", option, True, 0)
 
     def grab_string(self) -> str:
         """
-            collecting a ** FULL ** string
+            collecting a full string either to a new line or to EOF
 
         attrs
             in class
@@ -195,6 +219,25 @@ class PageParser(object):
 
         self.lookahead_ptr = 1
         while True:
+
+            # if grab_string happens to touch the edge of the file buffer
+            if self.lookahead_ptr + self.cursor >= len(self.file_buff):
+                print("EOF")
+                print(self.lookahead_ptr, self.cursor, len(self.file_buff))
+
+                # grab the last char
+                result += self.file_buff[-1]
+
+                # reset the cursor for the so we can exit cleanly 
+                # in the next scan that the parser makes
+                #self.cursor = self.cursor - (
+                    
+                #)
+                #self.cursor = len(self.file_buff)-2
+
+                # give the resulting string back
+                self.cursor = (self.lookahead_ptr + self.cursor) - 1
+                return result
 
             # if we reached the end of the line then we result the result
             if self.file_buff[self.cursor + self.lookahead_ptr] == "\n":
@@ -233,12 +276,19 @@ class PageParser(object):
         things = {}
         result = ""
         for i, token in enumerate(self.tokens):
+            # TODO: UGLY AF CODE
+            # if we are at the end of the tokens, then wrap the page in a body
+            if i >= len(self.tokens):
+                result = (
+                    '<link rel="stylesheet" href="../styles/main.css">'
+                    + '\n<body class="bod">\n'
+                    + result
+                    + "\n</body>"
+                )
 
-            if i+2 > len(self.tokens):
-                result = "<link rel=\"stylesheet\" href=\"../styles/main.css\">" + "\n<body class=\"bod\">\n" + result + "\n</body>"
 
             # this is always pushed to the front of "page stack"
-            elif token.type is TokenType.identifier:
+            if token.type is TokenType.identifier:
                 # assemble title
                 title = token.chars.get("title")
                 result += f"<title>{title}</title>"
@@ -254,15 +304,57 @@ class PageParser(object):
                 if token.size > 6:
                     raise Exception(f"invalid size: {token.size}")
 
-                result += f"<h{token.size} class=\"heading{token.size}\">{heading_title}</h{token.size}>"
+                result += (
+                    f'<h{token.size} class="heading{token.size}">'
+                    + f"{heading_title}</h{token.size}>"
+                )
                 result += "\n"
+
+            # we can't assume this is the first item
+            elif token.type is TokenType.list_item:
+                print("ss", token)
+                
+                # TODO: UGLY AF CODE
+                if i+1 >= len(self.tokens):
+                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
+                    result += "\n"
+                    result += "</ol>"
+                    result += "\n"
+                    result = (
+                        '<link rel="stylesheet" href="../styles/main.css">'
+                        + '\n<body class="bod">\n'
+                        + result
+                        + "\n</body>"
+                    )
+                    break
+
+                # TODO: make this agnostic to newlines
+                # if its the tail
+                elif self.tokens[i + 1].type != TokenType.list_item:
+                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
+                    result += "</ol>"
+                    result += "\n"
+
+                # TODO: make this agnostic to newlines
+                # if its the head
+                elif self.tokens[i - 1].type != TokenType.list_item:
+                    result += "<ol class=\"list-def\">\n"
+                    result += f'<li value="{token.size}">{token.chars}</li>'
+                    result += "\n"
+
+                else:
+
+                    # just append a new list item because we can reasonably assume
+                    # (without newlines) that this is the next list item
+                    result += f'<li value="{token.size}">{token.chars}</li>'
+                    result += "\n"
 
             elif token.type is TokenType.newline:
                 result += f"<pre>{token.chars}</pre>"
                 result += "\n"
 
             elif token.type is TokenType.string:
-                result += f"<div class=\"string-body\"><span>{token.chars}</span></div>"
+                result += f'<div class="string-body"><span>{token.chars}</span></div>'
                 result += "\n"
 
             # ignore comments
@@ -272,9 +364,12 @@ class PageParser(object):
             else:
                 raise Exception(f"invalid identifier: {token}")
 
+
         return result
 
-    def add_token(self, type_: str, chars: str, size=0, insert=False, position=None) -> None:
+    def add_token(
+        self, type_: str, chars: str, size=0, insert=False, position=None
+    ) -> None:
         """
         add a token to the token to the token buffer
 
@@ -335,7 +430,7 @@ class PageParser(object):
             the next char in the file buffer
         """
         # TODO: add boundary check
-        return self.file_buff[self.cursor+1]
+        return self.file_buff[self.cursor + 1]
 
     def parse_page(self) -> object:
         while True:
@@ -352,13 +447,6 @@ class PageParser(object):
             if char == "\n" or char == "\r":
                 self.line += 1
                 self.add_token("newline", "\n")
-
-            # tab characters are really just entity characters
-            # this should be respected by the "string" tokentype
-            # this is because the string tokentype is formatted into a <pre>
-            #elif char == "\t":
-                #self.add_token("tab", "\t")
-
 
             # grabbing full headings
             elif char == "#":
@@ -381,6 +469,21 @@ class PageParser(object):
 
                 else:
                     raise Exception(f"Unknown Option: {self.peek()}")
+
+            elif char.isdigit():
+                # ordered list
+                if self.peek() == ".":
+                    # store the current char before moving the cursor.
+                    # this way we now what we can feed as the li value->li_value
+                    li_value = char
+
+                    # we now can consume the next char
+                    self.cursor += 1
+
+                    item = self.grab_string()[1:].strip(" ")
+
+                    # here we reuse the size of the node to specify the list item value
+                    self.add_token("list_item", item, li_value)
 
             # the posibility of a comment
             elif char == "/":
@@ -405,7 +508,6 @@ class PageParser(object):
             # here we can just grab a full string
             elif self.is_char(char) or char == "\t":
 
-                
                 string = self.grab_string()
 
                 self.add_token("string", string)
@@ -415,7 +517,7 @@ class PageParser(object):
 
 
 if __name__ == "__main__":
-    with open("../examples/page.md") as fd:
+    with open("../examples/compiler.md") as fd:
         page = PageParser(fd)
 
         with open("index.html", "w+") as fd:
