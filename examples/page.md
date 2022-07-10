@@ -1,4 +1,4 @@
-# Why my girlfriend is awesome!
+# Why my girlfriend is awesome! (hehe compiler)
 
 ## Purpose
 
@@ -6,12 +6,12 @@ Telling you about how my girlfriend is awesome
 
 ### Proof
 
-// here are some comments 
+// TODO: comments are cool
 My girlfriend is awesome because she let me build this compiler in her bedroom, this I find really really nice of her
 in her bed without interupting me. 
 
-	She didn't give me tickles, She didn't ball tap me, she just simply... let me be
-// comments everywhere
+// seriously cool comments
+he didn't ball tap me, or torture me she- just simply... let me be
 
 for this she is awesome.
 
