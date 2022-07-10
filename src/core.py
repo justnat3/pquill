@@ -276,16 +276,6 @@ class PageParser(object):
         things = {}
         result = ""
         for i, token in enumerate(self.tokens):
-            # TODO: UGLY AF CODE
-            # if we are at the end of the tokens, then wrap the page in a body
-            if i >= len(self.tokens):
-                result = (
-                    '<link rel="stylesheet" href="../styles/main.css">'
-                    + '\n<body class="bod">\n'
-                    + result
-                    + "\n</body>"
-                )
-
 
             # this is always pushed to the front of "page stack"
             if token.type is TokenType.identifier:
@@ -312,7 +302,6 @@ class PageParser(object):
 
             # we can't assume this is the first item
             elif token.type is TokenType.list_item:
-                print("ss", token)
                 
                 # TODO: UGLY AF CODE
                 if i+1 >= len(self.tokens):
@@ -364,6 +353,12 @@ class PageParser(object):
             else:
                 raise Exception(f"invalid identifier: {token}")
 
+        result = (
+            '<link rel="stylesheet" href="../styles/main.css">'
+            + '\n<body class="bod">\n'
+            + result
+            + "\n</body>"
+        )
 
         return result
 
