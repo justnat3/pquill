@@ -7,6 +7,7 @@ however, it produces this from the markdown file.
 
 ![image](https://user-images.githubusercontent.com/58314490/178158712-32c30961-1396-4888-8d68-32bc3b7bd3df.png)
 
+out of file correction "she" didn't "ball tap" me
 a static html page! wonderful
 
 here are my further goals
