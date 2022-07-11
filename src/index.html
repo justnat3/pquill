@@ -3,10 +3,11 @@
 <h1 class="heading1">Creating a Blog Compiler (Static Pages)</h1>
 <div class="string-body"><span>For Blog compilation I am using python with no external packages other than the standard library. Just like making a programming language we have the following steps.</span></div>
 <ol class="list-def">
-<li value="1">Lexical analysis</li>
-<li value="2">Parsing(in this case no tree is needed)</li>
-<li value="3">Compilation</li>
-<li class="list-item" value="4">Profit</li></ol>
+<li class="list-item" value="1">Lexical analysis</li>
+<li class="list-item" value="2">Parsing(in this case no tree is needed)</li>
+<li class="list-item" value="3">Compilation</li>
+<li class="list-item" value="4">Profit</li>
+</ol>
 <div class="string-body"><span>So how does this all fit together?</span></div>
 <h2 class="heading2">The Parser</h2>
 <div class="string-body"><span>The Parser is really both the lexer & the parser combo'd together, in tandom this</span></div>
@@ -19,6 +20,48 @@
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt; def parse_page(self) -&gt; object: ...
 </pre><br>
 
-<div class="string-body"><span>render() will first call parse_page()</span></div>
+<div class="string-body"><span>render() will first call parse_page() and it looks traditional lex'ing code.</span></div>
+<ol class="list-def">
+<li class="list-item" value="1">Select a char with the parsers cursor</li>
+<li class="list-item" value="2">Figure out what it is and tokenize it</li>
+<li class="list-item" value="3">Add it to a list of tokens(no tree part)</li>
+<ul class="list-item-comment">
 
+<li class="list-item"> This is so that later on we can interpret the tokens context</li>
+
+<li class="list-item"> well here is another list comment</li>
+</ul>
+<li class="list-item" value="4">and here I am continuing the list</li>
+</ol>
+<pre class="block">
+def parse_page(self) -&gt; object:
+&nbsp;&nbsp;&nbsp;&nbsp;while True:
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# detecting the bounds of the line
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# if our cursor exceeds the bounds of the file_buff we can exit the parser
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if self.cursor &gt;= len(self.file_buff):
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char = self.file_buff[self.cursor]
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# I think it would be nice to honor newlines
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# in theory you could get around this by using comments
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if char == "\n" or char == "\r":
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.line += 1
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add_token("newline", "\n")
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# grabbing full headings
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif char == "#":
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# returns how much of a heading there is
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heading = self.grab_string()
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size = heading.count("#")
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heading = heading[size + 1 :]
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.add_token("atx_heading", heading, size)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...
+&nbsp;&nbsp;&nbsp;&nbsp;...
+...
+</pre>
 </body>

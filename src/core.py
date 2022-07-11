@@ -52,6 +52,7 @@ import sys
 
 
 class TokenType(Enum):
+    list_item_comment = auto()
     thematic_break = auto()  # --- *** ___
     code_block = auto()
     list_item = auto()
@@ -281,6 +282,7 @@ class PageParser(object):
         things = {}
         result = ""
         for i, token in enumerate(self.tokens):
+            print("new token!:", token)
 
             # this is always pushed to the front of "page stack"
             if token.type is TokenType.identifier:
@@ -325,29 +327,57 @@ class PageParser(object):
                     break
 
                 # TODO: make this agnostic to newlines
-                # if its the tail
-                elif self.tokens[i + 1].type != TokenType.list_item:
+                elif (
+                    self.tokens[i + 1].type != TokenType.list_item
+                    and self.tokens[i + 1].type != TokenType.list_item_comment
+                ):
                     result += (
                         f'<li class="list-item" value="{token.size}">{token.chars}</li>'
                     )
-                    result += "</ol>"
+                    result += "\n</ol>"
                     result += "\n"
 
                 # TODO: make this agnostic to newlines
                 # if its the head
                 elif self.tokens[i - 1].type != TokenType.list_item:
                     result += '<ol class="list-def">\n'
-                    result += f'<li value="{token.size}">{token.chars}</li>'
+                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
                     result += "\n"
 
                 else:
-
                     # just append a new list item because we can reasonably assume
                     # (without newlines) that this is the next list item
-                    result += f'<li value="{token.size}">{token.chars}</li>'
+                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
+                    result += "\n"
+
+            elif token.type is TokenType.list_item_comment:
+                # print("behind:", self.tokens[i-1], "in front:", self.tokens[i+1])
+                if self.tokens[i - 1].type != TokenType.list_item_comment:
+                    print("Started comment list")
+                    result += '<ul class="list-item-comment">'
+                    result += "\n"
+                    print("appended new list item comment!")
+                    result += f"\n<li class=\"list-item\">{token.chars}</li>\n"
+                    continue
+
+                print("appended new list item comment!")
+                result += f"\n<li class=\"list-item\">{token.chars}</li>\n"
+
+                # if the next node is not a list, we do not have the logic to end the
+                # last list the comment is apart of
+                if self.tokens[i + 1].type != TokenType.list_item:
+                    print("closed both lists")
+                    result += "</ul>"
+                    result += "</ol>"
+                    result += "\n"
+
+                if self.tokens[i + 1].type == TokenType.list_item:
+                    print("closed comment list")
+                    result += "</ul>"
                     result += "\n"
 
             elif token.type is TokenType.code_block:
+                # pre should take care of bare html code
                 result += f'<pre class="block">{token.chars}</pre>'
 
             elif token.type is TokenType.newline:
@@ -372,7 +402,7 @@ class PageParser(object):
                 continue
 
             else:
-                raise Exception(f"invalid identifier: {token}")
+                raise Exception(f"invalid identifier: " + token.chars)
 
         result = (
             '<link rel="stylesheet" href="../styles/main.css">'
@@ -465,7 +495,7 @@ class PageParser(object):
             IndexError("Cursor too close to end of file: amount + PageParser.cursor")
 
         # TODO: add boundary check
-        return self.file_buff[self.cursor: self.cursor + amount]
+        return self.file_buff[self.cursor : self.cursor + amount]
 
     def read_block(self) -> str:
         """
@@ -555,7 +585,7 @@ class PageParser(object):
 
                 if self.peek() == "o":
                     self.add_option()
-                
+
                 # Githug embeds
                 elif self.peek() == "c":
                     self.add_option()
@@ -564,7 +594,6 @@ class PageParser(object):
                     raise Exception(f"Unknown Option: {self.peek()}")
 
             elif char == "`":
-                print(self.peek_width())
                 if self.peek_width(2) == "``":
                     # move two more characters forward
                     self.cursor += 3
@@ -572,7 +601,6 @@ class PageParser(object):
                     self.add_token("code_block", block)
 
             elif char.isdigit():
-                print("is digit with dot", char, self.peek())
                 # ordered list
                 if self.peek() == ".":
                     # store the current char before moving the cursor.
@@ -587,16 +615,26 @@ class PageParser(object):
                     # here we reuse the size of the node to specify the list item value
                     self.add_token("list_item", item, li_value)
 
+            elif char == "-":
+                # grab that comment
+                string = self.grab_string()[1:]
+
+                # add a list-comment token
+                self.add_token("list_item_comment", string)
+
             # the posibility of a comment
             elif char == "/":
                 # make sure that the next char in the line is a comment
                 # for actual text we can ignore this later
                 if self.peek() == "/":
 
+                    # FATAL: IGNORE COMMENTS
+
                     # add a comment instead of a "full string"
                     # because ultimately we handle these differently
+
                     comment = self.grab_string()
-                    self.add_token("comment", comment)
+                    # self.add_token("comment", comment)
 
                     # we have to advance the cursor here because otherwise we would
                     # have an infinite loop

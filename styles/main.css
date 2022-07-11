@@ -115,10 +115,23 @@
 
 .list-def {
     margin-left: 16px;
+    margin-top: 16px;
+    margin-bottom: 20px;
 }
 
-.list-item {
 
+  /* havent found anything I want to do with this yet */
+.list-item {
+    margin-bottom: 3px;
+}
+
+.list-item-comment {
+    list-style-type: none;
+
+    padding-left: 20px;
+    margin-top: 0;
+
+    font-size: 14px;
 }
 
 .block {
