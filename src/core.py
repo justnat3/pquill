@@ -48,10 +48,12 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Union
 import json
+import sys
 
 
 class TokenType(Enum):
     thematic_break = auto()  # --- *** ___
+    code_block = auto()
     list_item = auto()
     insecure_char = auto()  # replacement char -> U+FFFD
     identifier = auto()  # \options: {}
@@ -228,12 +230,12 @@ class PageParser(object):
                 # grab the last char
                 result += self.file_buff[-1]
 
-                # reset the cursor for the so we can exit cleanly 
+                # reset the cursor for the so we can exit cleanly
                 # in the next scan that the parser makes
-                #self.cursor = self.cursor - (
-                    
-                #)
-                #self.cursor = len(self.file_buff)-2
+                # self.cursor = self.cursor - (
+
+                # )
+                # self.cursor = len(self.file_buff)-2
 
                 # give the resulting string back
                 self.cursor = (self.lookahead_ptr + self.cursor) - 1
@@ -259,7 +261,7 @@ class PageParser(object):
 
         # return the level of header
         self.cursor = self.lookahead_ptr + self.cursor
-        return result.replace("\t", "&#9")
+        return result
 
     def render(self) -> str:
         """
@@ -302,10 +304,12 @@ class PageParser(object):
 
             # we can't assume this is the first item
             elif token.type is TokenType.list_item:
-                
+
                 # TODO: UGLY AF CODE
-                if i+1 >= len(self.tokens):
-                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
+                if i + 1 >= len(self.tokens):
+                    result += (
+                        f'<li class="list-item" value="{token.size}">{token.chars}</li>'
+                    )
                     result += "\n"
                     result += "</ol>"
                     result += "\n"
@@ -320,14 +324,16 @@ class PageParser(object):
                 # TODO: make this agnostic to newlines
                 # if its the tail
                 elif self.tokens[i + 1].type != TokenType.list_item:
-                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
+                    result += (
+                        f'<li class="list-item" value="{token.size}">{token.chars}</li>'
+                    )
                     result += "</ol>"
                     result += "\n"
 
                 # TODO: make this agnostic to newlines
                 # if its the head
                 elif self.tokens[i - 1].type != TokenType.list_item:
-                    result += "<ol class=\"list-def\">\n"
+                    result += '<ol class="list-def">\n'
                     result += f'<li value="{token.size}">{token.chars}</li>'
                     result += "\n"
 
@@ -338,9 +344,21 @@ class PageParser(object):
                     result += f'<li value="{token.size}">{token.chars}</li>'
                     result += "\n"
 
+            elif token.type is TokenType.code_block:
+                result += f'<pre><code class=\"block\">{token.chars}</code></pre>'
+
             elif token.type is TokenType.newline:
-                result += f"<pre>{token.chars}</pre>"
-                result += "\n"
+                # if we are at EOF, then we don't really care about the newline
+                if i + 1 >= len(self.tokens):
+                    continue
+
+                # only add a line break if there are 2 newlines for in source
+                # formatting. This prevents lack of lines between markdown decs
+                if (
+                    self.tokens[i + 1].type == TokenType.newline
+                    or self.tokens[i - 1] == TokenType.newline
+                ):
+                    result += "<br>\n\n"
 
             elif token.type is TokenType.string:
                 result += f'<div class="string-body"><span>{token.chars}</span></div>'
@@ -414,7 +432,7 @@ class PageParser(object):
             )
         )
 
-    def peek(self) -> str:
+    def peek(self, amount: int) -> str:
         """
             peek at the next character in the file buffer is there is room
 
@@ -424,8 +442,71 @@ class PageParser(object):
         returns
             the next char in the file buffer
         """
+        if amount == 0:
+            raise Exception("You can't peek nothing")
+
+        if amount + self.cursor >= len(self.file_buff):
+            IndexError("Cursor too close to end of file: amount + PageParser.cursor")
+
         # TODO: add boundary check
-        return self.file_buff[self.cursor + 1]
+        return self.file_buff[self.cursor : self.cursor + amount]
+
+    def read_block(self) -> str:
+        """
+            collecting a full string either to a new line or to EOF
+
+        attrs
+            in class
+
+        Returns
+            str     full string to collect
+        """
+        print("parsing block")
+        # store the current char that is a char
+        result: str = self.file_buff[self.cursor]
+
+        self.lookahead_ptr = 1
+        while True:
+
+            tmp_cursor = self.cursor + self.lookahead_ptr
+
+            # if grab_string happens to touch the edge of the file buffer
+            if tmp_cursor >= len(self.file_buff):
+
+                # grab the last char
+                result += self.file_buff[-1]
+
+                # give the resulting string back
+                self.cursor = (tmp_cursor) - 1
+                return result
+
+            try:
+                # if we reached the end of the line then we result the result
+                if self.file_buff[tmp_cursor] == "`":
+
+                    # reset the position cursor
+                    self.cursor = tmp_cursor
+
+                    if self.peek(2) == "``":
+                        self.cursor += 2
+
+                        # we should have the last char at this point
+                        return result
+
+                    else:
+                        continue
+
+                # get the next char
+                result += self.file_buff[tmp_cursor]
+
+                # the next char
+                self.lookahead_ptr += 1
+
+            except Exception:
+                raise Exception("did not find edege of block")
+
+        # return the level of header
+        self.cursor = tmp_cursor
 
     def parse_page(self) -> object:
         while True:
@@ -456,18 +537,28 @@ class PageParser(object):
 
             elif char == "\\":
 
-                if self.peek() == "o":
+                if self.peek(1) == "o":
                     self.add_option()
 
-                elif self.peek() == "c":
+                elif self.peek(1) == "c":
                     self.add_option()
 
                 else:
                     raise Exception(f"Unknown Option: {self.peek()}")
 
+            elif char == "`":
+                print("code block start", char)
+                print(self.peek(2))
+                if self.peek(2) == "``":
+                    print("enter block")
+                    # move two more characters forward
+                    self.cursor += 2
+                    block = self.read_block()
+                    self.add_token("code_block", block)
+
             elif char.isdigit():
                 # ordered list
-                if self.peek() == ".":
+                if self.peek(1) == ".":
                     # store the current char before moving the cursor.
                     # this way we now what we can feed as the li value->li_value
                     li_value = char
@@ -484,7 +575,7 @@ class PageParser(object):
             elif char == "/":
                 # make sure that the next char in the line is a comment
                 # for actual text we can ignore this later
-                if self.peek() == "/":
+                if self.peek(1) == "/":
 
                     # add a comment instead of a "full string"
                     # because ultimately we handle these differently
@@ -523,4 +614,4 @@ if __name__ == "__main__":
             print(final)
             fd.write(final)
 
-    exit(-1)
+    sys.exit(0)
