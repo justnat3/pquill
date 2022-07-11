@@ -106,7 +106,12 @@ class Token(object):
         self.size = size
 
     def __str__(self):
-        return str({self.type: self.chars})
+        return (
+            f"{self.type}->"
+            + f"({repr(self.chars[:20]) + '...' if len(self.chars) > 20 else repr(self.chars)})".replace(
+                "\n", ""
+            )
+        )
 
     def __dict__(self):
         return {"_type": _type, "chars": chars, "size": size}
@@ -224,8 +229,6 @@ class PageParser(object):
 
             # if grab_string happens to touch the edge of the file buffer
             if self.lookahead_ptr + self.cursor >= len(self.file_buff):
-                print("EOF")
-                print(self.lookahead_ptr, self.cursor, len(self.file_buff))
 
                 # grab the last char
                 result += self.file_buff[-1]
@@ -432,12 +435,25 @@ class PageParser(object):
             )
         )
 
-    def peek(self, amount: int) -> str:
+    def peek(self) -> str:
         """
             peek at the next character in the file buffer is there is room
 
         args
             none
+
+        returns
+            the next char in the file buffer
+        """
+        # TODO: add boundary check
+        return self.file_buff[self.cursor + 1]
+
+    def peek_width(self, amount=2) -> str:
+        """
+            peek at the next character in the file buffer is there is room
+
+        args
+            amount  to peek with width
 
         returns
             the next char in the file buffer
@@ -449,7 +465,7 @@ class PageParser(object):
             IndexError("Cursor too close to end of file: amount + PageParser.cursor")
 
         # TODO: add boundary check
-        return self.file_buff[self.cursor : self.cursor + amount]
+        return self.file_buff[self.cursor: self.cursor + amount]
 
     def read_block(self) -> str:
         """
@@ -461,7 +477,6 @@ class PageParser(object):
         Returns
             str     full string to collect
         """
-        print("parsing block")
         # store the current char that is a char
         result: str = self.file_buff[self.cursor]
 
@@ -488,7 +503,7 @@ class PageParser(object):
                     # reset the position cursor
                     self.cursor = tmp_cursor
 
-                    if self.peek(2) == "``":
+                    if self.peek_width() == "``":
                         self.cursor += 2
 
                         # we should have the last char at this point
@@ -538,32 +553,28 @@ class PageParser(object):
 
             elif char == "\\":
 
-                if self.peek(1) == "o":
+                if self.peek() == "o":
                     self.add_option()
-
-                elif self.peek(1) == "c":
+                
+                # Githug embeds
+                elif self.peek() == "c":
                     self.add_option()
 
                 else:
                     raise Exception(f"Unknown Option: {self.peek()}")
 
             elif char == "`":
-                print("code block start", char)
-                print(self.peek(2))
-                if self.peek(2) == "``":
-                    print("enter block")
+                print(self.peek_width())
+                if self.peek_width(2) == "``":
                     # move two more characters forward
                     self.cursor += 3
-                    block = (
-                        self.read_block()
-                        .replace("<", "&lt;")
-                        .replace(">", "&gt;")
-                    )
+                    block = self.read_block().replace("<", "&lt;").replace(">", "&gt;")
                     self.add_token("code_block", block)
 
             elif char.isdigit():
+                print("is digit with dot", char, self.peek())
                 # ordered list
-                if self.peek(1) == ".":
+                if self.peek() == ".":
                     # store the current char before moving the cursor.
                     # this way we now what we can feed as the li value->li_value
                     li_value = char
@@ -580,7 +591,7 @@ class PageParser(object):
             elif char == "/":
                 # make sure that the next char in the line is a comment
                 # for actual text we can ignore this later
-                if self.peek(1) == "/":
+                if self.peek() == "/":
 
                     # add a comment instead of a "full string"
                     # because ultimately we handle these differently
@@ -608,15 +619,16 @@ class PageParser(object):
 
 
 if __name__ == "__main__":
-    with open("../examples/test.md", "r") as fd:
+    with open("../examples/compiler.md", "r") as fd:
         page = PageParser(fd)
 
         with open("index.html", "w+") as fd:
+            print("Compiling Page")
             final = page.render()
-            for node in page.tokens:
-                print(node)
-            print()
-            print(final)
+            if "--debug" in sys.argv:
+                for node in page.tokens:
+                    print(node)
+            print("Compliation Complete!")
             fd.write(final)
 
     sys.exit(0)
