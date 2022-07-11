@@ -345,7 +345,7 @@ class PageParser(object):
                     result += "\n"
 
             elif token.type is TokenType.code_block:
-                result += f'<pre><code class=\"block\">{token.chars}</code></pre>'
+                result += f'<pre class="block">{token.chars}</pre>'
 
             elif token.type is TokenType.newline:
                 # if we are at EOF, then we don't really care about the newline
@@ -466,6 +466,7 @@ class PageParser(object):
         result: str = self.file_buff[self.cursor]
 
         self.lookahead_ptr = 1
+
         while True:
 
             tmp_cursor = self.cursor + self.lookahead_ptr
@@ -552,8 +553,12 @@ class PageParser(object):
                 if self.peek(2) == "``":
                     print("enter block")
                     # move two more characters forward
-                    self.cursor += 2
-                    block = self.read_block()
+                    self.cursor += 3
+                    block = (
+                        self.read_block()
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
+                    )
                     self.add_token("code_block", block)
 
             elif char.isdigit():
@@ -603,7 +608,7 @@ class PageParser(object):
 
 
 if __name__ == "__main__":
-    with open("../examples/compiler.md") as fd:
+    with open("../examples/test.md", "r") as fd:
         page = PageParser(fd)
 
         with open("index.html", "w+") as fd:
