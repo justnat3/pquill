@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import pdb
 
 #   \title      core.py
 #
@@ -61,7 +62,7 @@ class DocNodeType(Enum):
     comment = auto()  # //
     heading = auto()  # NODE("#")
     newline = auto()  # \n
-    string = auto()  # "this is a string" || this is a string
+    paragraph = auto()  # "this is a string" || this is a string
     tab = auto()  # \t perhaps this is a entity_char
     text = auto()
     _list = auto()
@@ -138,11 +139,6 @@ class DocNode(object):
         self.text = text
 
     def __str__(self):
-        if self.text:
-            return (str(self.type) + "\n  "+ self.text)
-        if self.depth:
-            return (str(self.depth))
-
         return str(self.type)
 
     def as_dict(self):
@@ -238,6 +234,7 @@ class PageParser(object):
             # then add a list with the list item as its child
             if token.type is DocNodeType.list_item:
                 if idx != 1 and self.tree.successors[-1].type is not DocNodeType._list:
+                    print("LIST ITEM")
                     node = DocNode(
                         DocNodeType._list,
                         [DocNode(_type=DocNodeType.list_item, text=token.value)],
@@ -245,17 +242,14 @@ class PageParser(object):
                     self.tree.successors.append(node)
                     continue
                 elif token.type is DocNodeType.list_item:
+                    print("LIST ITEM")
                     index = token.value.index(".")
-                    d = token.value[:index+1].strip(".")
+                    d = token.value[: index + 1].strip(".")
                     token.value = token.value[index:]
 
                     node = DocNode(
                         DocNodeType.list_item,
-                        [
-                            DocNode(
-                                _type=DocNodeType.text, text=token.value, depth=d
-                            )
-                        ],
+                        [DocNode(_type=DocNodeType.text, text=token.value, depth=d)],
                     )
                     self.tree.successors[-1].successors.append(node)
                     continue
@@ -271,28 +265,49 @@ class PageParser(object):
                     )
                 )
                 continue
-            elif token.type is DocNodeType.string:
+            elif token.type is DocNodeType.paragraph:
                 self.tree.successors.append(
                     DocNode(
-                        DocNodeType.string,
+                        DocNodeType.paragraph,
                         [DocNode(DocNodeType.text, text=token.value)],
                     )
                 )
             elif token.type is DocNodeType.code_block:
                 self.tree.successors.append(
-                    DocNode(DocNodeType.code_block, 
-                    [DocNode(DocNodeType.text, text=token.value)]))
-            
+                    DocNode(
+                        DocNodeType.code_block,
+                        [DocNode(DocNodeType.text, text=token.value)],
+                    )
+                )
+
             elif token.type is DocNodeType.text:
                 self.tree.successors.append(
-                    DocNode(DocNodeType.text, 
-                    [DocNode(DocNodeType.text, text=token.value)]))
+                    DocNode(
+                        DocNodeType.text, [DocNode(DocNodeType.text, text=token.value)]
+                    )
+                )
             else:
                 pass
 
         # init page
-        for i in self.tree.successors:
+
+        # root->(first)node->page
+
+        ptr = 0
+        for idx, i in enumerate(self.tree.successors):
+            print("NEXT_TOP_NODE\t\t", hex(id(i)), "\t", i.type)
+            # pdb.set_trace()
             if i.type is DocNodeType.heading:
+                # if i.depth == '1':
+                #     PageHeading = "<div class='PageHeadline'>"
+                #     PageHeadingEnd = "</div>"
+                #     heading = f"<h{i.depth}>"
+                #     text = i.successors[0].text
+                #     end = f"</h{i.depth}>"
+                #     line = PageHeading + heading + text + end +PageHeadingEnd
+                #     self.add_html_tag(line)
+                #     continue
+
                 heading = f"<h{i.depth}>"
                 text = i.successors[0].text
                 end = f"</h{i.depth}>"
@@ -303,7 +318,10 @@ class PageParser(object):
                 list_start = "<ol>"
                 self.add_html_tag(list_start)
                 for j in i.successors:
-                    if j.type is DocNodeType.list_item and j.successors[0].type is DocNodeType.text:
+                    if (
+                        j.type is DocNodeType.list_item
+                        and j.successors[0].type is DocNodeType.text
+                    ):
                         body = j.successors[0].text
                         li = f"<li value='{j.depth}'>" + body + "</li>"
                         self.add_html_tag(li)
@@ -311,24 +329,44 @@ class PageParser(object):
                 list_end = "</ol>"
                 self.add_html_tag(list_end)
 
-            elif i.type is DocNodeType.string:
-                paragraph = i.successors[0].text
-                p_start = "<p>"
-                p_end = "</p>"
-                line = p_start + paragraph + p_end
+            elif i.type is DocNodeType.paragraph:
+                block_start = "<p>"
+                block = i.successors[0].text
+                block_end = "</p>"
+                line = block_start + block + block_end
                 self.add_html_tag(line)
-            
+
             elif i.type is DocNodeType.code_block:
                 block_start = "<pre>"
                 block = i.successors[0].text
                 block_end = "</pre>"
                 line = block_start + block + block_end
                 self.add_html_tag(line)
-            
+
             else:
                 raise ValueError(f"unknown type {i.type}")
 
-        return(self.page)
+        # build the rest of the page
+        #     div* class("pure-grid maincolumn")
+        # div* class("lwn-u-1 pure-u-md-19-24")
+        #     PageHeadline
+        #         Starting feature text has no tag or class
+
+        #     div* class("ArticleText")
+        start_page = (
+            "<head>"
+            + "\n<link rel='stylesheet' href='../styles/skeleton.css'>"
+            + "\n</head>"
+            + "\n<body>"
+            + "\n<div class='pure-grid maincolumn'>"
+            + "\n<div class='lwn-u-1 pure-u-md-19-24'"
+        )
+        end_page = "</div>" + "\n</div>" + "\n</body>"
+
+        for i in self.tree.successors:
+            print(i.type)
+
+        return start_page + self.page + end_page
 
 
 class PageLexer(object):
@@ -580,7 +618,7 @@ class PageLexer(object):
             # in theory you could get around this by using comments
             if char == "\n" or char == "\r":
                 self.line += 1
-                self.add_token(DocNodeType["newline"], "\n")
+                # self.add_token(DocNodeType["newline"], "\n")
 
             # grabbing full headings
             elif char == "#":
@@ -614,13 +652,6 @@ class PageLexer(object):
             elif char.isdigit():
                 # ordered list
                 if self.peek() == ".":
-                    # store the current char before moving the cursor.
-                    # this way we now what we can feed as the li value->li_value
-                    li_value = char
-
-                    # we now can consume the next char
-                    # self.cursor += 1
-
                     item = self.grab_string()
 
                     # here we reuse the size of the node to specify the list item value
@@ -645,7 +676,6 @@ class PageLexer(object):
                     # add a comment instead of a "full string"
                     # because ultimately we handle these differently
 
-                    comment = self.grab_string()
                     # self.add_token("comment", comment)
 
                     # we have to advance the cursor here because otherwise we would
@@ -655,14 +685,21 @@ class PageLexer(object):
 
                 # grab the full string any way, so that we don't consider '/' a comment
                 string = self.grab_string()
-                self.add_token(DocNodeType["string"], string)
+                # print(self.doc_nodes)
+                # if self.doc_nodes[-1].type is DocNodeType.paragraph:
+                #     self.doc_nodes[-1].value += " " + string
+                    # continue
+                self.add_token(DocNodeType["paragraph"], string)
 
             # here we can just grab a full string
             elif self.is_char(char) or char == "\t":
 
                 string = self.grab_string()
 
-                self.add_token(DocNodeType["string"], string)
+                # if self.doc_nodes[-1].type is DocNodeType.paragraph:
+                #     self.doc_nodes[-1].value += " " + string
+                #     continue
+                self.add_token(DocNodeType["paragraph"], string)
 
             # go to the next char at the top of the scope
             self.cursor += 1
