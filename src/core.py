@@ -12,14 +12,14 @@
 # i'm trying not to just mindless code here, I want this to be somewhat stable
 # so here are some markers that I want for the page renderer
 
-# all text related Token's should have the strings attached to them
+# all text related DocNode's should have the strings attached to them
 # this is so we can more easily craft the page in the end
 # we are not really trying to create a commonmark implementation
 # this is just a page renderer based on markdown iteself
 # I think that explains it
 
-# comments should be respected as long as they are not apart of a atx_heading
-# or really any other Token that has text attached to it
+# comments should be respected as long as they are not apart of a heading
+# or really any other DocNode that has text attached to it
 # for example we should parse this a comment
 # \\ this is a comment t
 # and not this
@@ -44,32 +44,32 @@
 #   the sites should for the most part be in the same format
 
 
-from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Union
+from io import TextIOWrapper
+import json
 import json
 import sys
 
 
-class TokenType(Enum):
+class DocNodeType(Enum):
     list_item_comment = auto()
-    thematic_break = auto()  # --- *** ___
-    code_block = auto()
+    root = auto()
+
     list_item = auto()
-    insecure_char = auto()  # replacement char -> U+FFFD
+    code_block = auto()
     identifier = auto()  # \options: {}
     comment = auto()  # //
-    entity_char = auto()  # &nbsp
-    atx_heading = auto()  # NODE("#")
+    heading = auto()  # NODE("#")
     newline = auto()  # \n
     string = auto()  # "this is a string" || this is a string
     tab = auto()  # \t perhaps this is a entity_char
-
+    text = auto()
+    _list = auto()
     # we do not current support html this could be "unsafe"
     # block = auto()  # <li> <ul> => NODE("-")
 
 
-class PageParserError(object):
+class PageLexerError(object):
     """
         A parser error type
 
@@ -83,61 +83,274 @@ class PageParserError(object):
     def __init__(self, message: str, position: int, line: int):
         self.position = position
         self.message = message
+        self.line = line
 
     def __str__(self):
-        return f"PageParserError(l{self.line}:c{self.position}): " + self.message
+        return f"PageLexerError(l{self.line}:c{self.position}): " + self.message
 
 
-class Token(object):
+class DocToken:
     """
     Defining what a parser token looks like
 
     args
-        type    TokenType
-        chars   String representing the value of the token
-        size    Mostly used to describe the detail of a token
-                for example
-                    atx_heading may have a size of 3 (h3)
-                    or list_item token might have the value 3
+        type        (* enum)DocNodeType
+        text        String representing the value of the token
+        depth       most how deep an object is ## in depth is 2
+        successors  children
+        ordered     for lists if they are ordered or not
+        text        string value for the node
     """
 
-    def __init__(self, _type: TokenType, chars: str, size: int):
+    def __init__(
+        self,
+        type: DocNodeType,
+        value: str,
+    ):
+        self.type = type
+        self.value = value
+
+    # def __str__(self):
+    #     return (
+    #         f"{self.type}->"
+    #         + f"({repr(self.value[:20]) + '...' if len(self.value) > 20 else repr(self.value)})".replace(
+    #             "\n", ""
+    #         )
+    #     )
+
+    def as_dict(self):
+        return {"type": str(self.type), "value": self.value}
+
+
+class DocNode(object):
+    def __init__(
+        self,
+        _type,
+        successors=[],
+        depth=1,
+        ordered=True,
+        text="",
+    ):
         self.type = _type
-        self.chars = chars
-        self.size = size
+        self.successors = successors
+        self.depth = depth
+        self.ordered = ordered
+        self.text = text
 
     def __str__(self):
-        return (
-            f"{self.type}->"
-            + f"({repr(self.chars[:20]) + '...' if len(self.chars) > 20 else repr(self.chars)})".replace(
-                "\n", ""
-            )
-        )
+        if self.text:
+            return (str(self.type) + "\n  "+ self.text)
+        if self.depth:
+            return (str(self.depth))
 
-    def __dict__(self):
-        return {"_type": _type, "chars": chars, "size": size}
+        return str(self.type)
+
+    def as_dict(self):
+        return {
+            "type": str(self.type),
+            "successors": self.successors,
+            "depth": str(self.depth),
+            "text": self.text,
+            "depth": self.depth,
+            "ordered": self.ordered,
+        }
+
+
+class PageFormatTypes(Enum):
+    """
+    Types for the way that we parse page section colors
+    + how we define page format
+
+        .. Page Format: as defined below
+
+    div* class("pure-grid maincolumn")
+        div* class("lwn-u-1 pure-u-md-19-24")
+            PageHeadline
+                Starting feature text has no tag or class
+
+            div* class("ArticleText")
+
+                Paragraphs
+                    paragraph tag no class
+
+                Quotes
+                    blockquote* class("bq")
+
+    FUTURE: FeatureByLIne
+        author
+        date
+        TODO: description
+    """
+
+    # Required
+    GridMainColumn = object()
+    Start = object()
+    PageHeadline = object()  # Div->H2
+    ArticleTextDiv = object()  # Div->text
+    # Optional
 
 
 class PageParser(object):
+    def __init__(self, doc_nodes):
+        self.doc_nodes: list = doc_nodes
+        self.page: str = ""
+        self.tree = DocNode(DocNodeType.root)
+
+    def add_html_tag(self, tag):
+        self.page += tag
+
+    def render(self):
+        """
+        The way we render the page
+
+            .. Page Format: as defined below
+
+        div* class("pure-grid maincolumn")
+            div* class("lwn-u-1 pure-u-md-19-24")
+                PageHeadline
+                    Starting feature text has no tag or class
+
+                div* class("ArticleText")
+
+                    Paragraphs
+                        paragraph tag no class
+
+                    Quotes
+                        blockquote* class("bq")
+
+        FUTURE: FeatureByLIne
+            author
+            date
+            TODO: description
+            Render the page
+
+        attrs
+            none    self
+
+        returns
+            none
+
+        """
+
+        for idx, token in enumerate(self.doc_nodes):
+            # if the node is a list item
+            # and the last node is not a list
+            # then add a list with the list item as its child
+            if token.type is DocNodeType.list_item:
+                if idx != 1 and self.tree.successors[-1].type is not DocNodeType._list:
+                    node = DocNode(
+                        DocNodeType._list,
+                        [DocNode(_type=DocNodeType.list_item, text=token.value)],
+                    )
+                    self.tree.successors.append(node)
+                    continue
+                elif token.type is DocNodeType.list_item:
+                    index = token.value.index(".")
+                    d = token.value[:index+1].strip(".")
+                    token.value = token.value[index:]
+
+                    node = DocNode(
+                        DocNodeType.list_item,
+                        [
+                            DocNode(
+                                _type=DocNodeType.text, text=token.value, depth=d
+                            )
+                        ],
+                    )
+                    self.tree.successors[-1].successors.append(node)
+                    continue
+                else:
+                    # unreachable
+                    raise
+            elif token.type is DocNodeType.heading:
+                depth = token.value.count("#")
+                self.tree.successors.append(
+                    DocNode(
+                        DocNodeType.heading,
+                        [DocNode(DocNodeType.text, text=token.value, depth=depth)],
+                    )
+                )
+                continue
+            elif token.type is DocNodeType.string:
+                self.tree.successors.append(
+                    DocNode(
+                        DocNodeType.string,
+                        [DocNode(DocNodeType.text, text=token.value)],
+                    )
+                )
+            elif token.type is DocNodeType.code_block:
+                self.tree.successors.append(
+                    DocNode(DocNodeType.code_block, 
+                    [DocNode(DocNodeType.text, text=token.value)]))
+            
+            elif token.type is DocNodeType.text:
+                self.tree.successors.append(
+                    DocNode(DocNodeType.text, 
+                    [DocNode(DocNodeType.text, text=token.value)]))
+            else:
+                pass
+
+        # init page
+        for i in self.tree.successors:
+            if i.type is DocNodeType.heading:
+                heading = f"<h{i.depth}>"
+                text = i.successors[0].text
+                end = f"</h{i.depth}>"
+                line = heading + text + end
+                self.add_html_tag(line)
+
+            elif i.type is DocNodeType._list:
+                list_start = "<ol>"
+                self.add_html_tag(list_start)
+                for j in i.successors:
+                    if j.type is DocNodeType.list_item and j.successors[0].type is DocNodeType.text:
+                        body = j.successors[0].text
+                        li = f"<li value='{j.depth}'>" + body + "</li>"
+                        self.add_html_tag(li)
+
+                list_end = "</ol>"
+                self.add_html_tag(list_end)
+
+            elif i.type is DocNodeType.string:
+                paragraph = i.successors[0].text
+                p_start = "<p>"
+                p_end = "</p>"
+                line = p_start + paragraph + p_end
+                self.add_html_tag(line)
+            
+            elif i.type is DocNodeType.code_block:
+                block_start = "<pre>"
+                block = i.successors[0].text
+                block_end = "</pre>"
+                line = block_start + block + block_end
+                self.add_html_tag(line)
+            
+            else:
+                raise ValueError(f"unknown type {i.type}")
+
+        return(self.page)
+
+
+class PageLexer(object):
     """
     our global parser object
 
     lookahead_ptr   a pointer to look ahead of the cursor temporarily
     _has_errors     defining what the parser ran into during scans
-    file_buff       chars from the source file
+    file_buff       text from the source file
     column          what column are we on in a line
-    tokens          list of tokens we have collected in scans
+    doc_nodes          list of tokens we have collected in scans
     cursor          where we are in the source file
     line            what line are we on, primarily used with column
     fd              a hidden file descriptor for our source file
     """
 
-    def __init__(self, file_buff: str):
+    def __init__(self, file_buff: TextIOWrapper):
         self.file_buff = file_buff.read()
         self.lookahead_ptr = 0
         self._has_errors = []
         self.fd = file_buff
-        self.tokens = []
+        self.doc_nodes = []
         self.cursor = 0
         self.column = 0
         self.line = 0
@@ -146,7 +359,6 @@ class PageParser(object):
         """creating the final page"""
 
         # create the page
-        return "\n".join(self.page)
 
     def styles(self, path: str) -> None:
         """
@@ -161,17 +373,17 @@ class PageParser(object):
         """
         ...
 
-    def create_error(self, msg: str) -> PageParserError:
+    def create_error(self, msg: str) -> None:
         """
-            Create a new PageParser error
+            Create a new PageLexer error
 
         attrs
             msg message to say what the error is, and if we can continue
 
         returns
-            PageParserError(class)
+            PageLexerError(class)
         """
-        error = PageParserError()
+        error = None
 
     def is_char(self, char: str) -> bool:
         """
@@ -186,31 +398,6 @@ class PageParser(object):
             if char >= "a" and char <= "z" or char >= "A" and char <= "Z"
             else False
         )
-
-    def add_option(self) -> None:
-        """
-            To add an option to the begining of the token buffer
-
-        examples
-            o   title
-            c   a code block (gist embed)
-
-        returns
-            nothing
-        """
-        valid_options = ["title", "code_embed"]
-        # grab the options string
-        self.cursor += 2
-
-        # get dict options
-        _json = self.grab_string()
-        option = json.loads(_json)
-
-        # TODO: find a way to have valid and invalid keys
-        # if option not in valid_options:
-        # raise Exception(f"invalid option: {option.keys()}")
-
-        self.add_token("identifier", option, True, 0)
 
     def grab_string(self) -> str:
         """
@@ -263,158 +450,12 @@ class PageParser(object):
             # the next char
             self.lookahead_ptr += 1
 
-        # return the level of header
-        self.cursor = self.lookahead_ptr + self.cursor
-        return result
-
-    def render(self) -> str:
-        """
-            Render the page
-
-        attrs
-            none    self
-
-        returns
-            none
-
-        """
-        self.parse_page()
-        things = {}
-        result = ""
-        for i, token in enumerate(self.tokens):
-            print("new token!:", token)
-
-            # this is always pushed to the front of "page stack"
-            if token.type is TokenType.identifier:
-                # assemble title
-                title = token.chars.get("title")
-                result += f"<title>{title}</title>"
-                result += "\n"
-
-                if "favicon" in token.chars:
-                    print("FABULOUS")
-
-            # the headings order really don't matter luckily
-            elif token.type is TokenType.atx_heading:
-                heading_title = token.chars
-
-                if token.size > 6:
-                    raise Exception(f"invalid size: {token.size}")
-
-                result += (
-                    f'<h{token.size} class="heading{token.size}">'
-                    + f"{heading_title}</h{token.size}>"
-                )
-                result += "\n"
-
-            # we can't assume this is the first item
-            elif token.type is TokenType.list_item:
-
-                # TODO: UGLY AF CODE
-                if i + 1 >= len(self.tokens):
-                    result += (
-                        f'<li class="list-item" value="{token.size}">{token.chars}</li>'
-                    )
-                    result += "\n"
-                    result += "</ol>"
-                    result += "\n"
-                    result = (
-                        '<link rel="stylesheet" href="../styles/main.css">'
-                        + '\n<body class="bod">\n'
-                        + result
-                        + "\n</body>"
-                    )
-                    break
-
-                # TODO: make this agnostic to newlines
-                elif (
-                    self.tokens[i + 1].type != TokenType.list_item
-                    and self.tokens[i + 1].type != TokenType.list_item_comment
-                ):
-                    result += (
-                        f'<li class="list-item" value="{token.size}">{token.chars}</li>'
-                    )
-                    result += "\n</ol>"
-                    result += "\n"
-
-                # TODO: make this agnostic to newlines
-                # if its the head
-                elif self.tokens[i - 1].type != TokenType.list_item:
-                    result += '<ol class="list-def">\n'
-                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
-                    result += "\n"
-
-                else:
-                    # just append a new list item because we can reasonably assume
-                    # (without newlines) that this is the next list item
-                    result += f'<li class=\"list-item\" value="{token.size}">{token.chars}</li>'
-                    result += "\n"
-
-            elif token.type is TokenType.list_item_comment:
-                # print("behind:", self.tokens[i-1], "in front:", self.tokens[i+1])
-                if self.tokens[i - 1].type != TokenType.list_item_comment:
-                    print("Started comment list")
-                    result += '<ul class="list-item-comment">'
-                    result += "\n"
-                    print("appended new list item comment!")
-                    result += f"\n<li class=\"list-item\">{token.chars}</li>\n"
-                    continue
-
-                print("appended new list item comment!")
-                result += f"\n<li class=\"list-item\">{token.chars}</li>\n"
-
-                # if the next node is not a list, we do not have the logic to end the
-                # last list the comment is apart of
-                if self.tokens[i + 1].type != TokenType.list_item:
-                    print("closed both lists")
-                    result += "</ul>"
-                    result += "</ol>"
-                    result += "\n"
-
-                if self.tokens[i + 1].type == TokenType.list_item:
-                    print("closed comment list")
-                    result += "</ul>"
-                    result += "\n"
-
-            elif token.type is TokenType.code_block:
-                # pre should take care of bare html code
-                result += f'<pre class="block">{token.chars}</pre>'
-
-            elif token.type is TokenType.newline:
-                # if we are at EOF, then we don't really care about the newline
-                if i + 1 >= len(self.tokens):
-                    continue
-
-                # only add a line break if there are 2 newlines for in source
-                # formatting. This prevents lack of lines between markdown decs
-                if (
-                    self.tokens[i + 1].type == TokenType.newline
-                    or self.tokens[i - 1] == TokenType.newline
-                ):
-                    result += "<br>\n\n"
-
-            elif token.type is TokenType.string:
-                result += f'<div class="string-body"><span>{token.chars}</span></div>'
-                result += "\n"
-
-            # ignore comments
-            elif token.type is TokenType.comment:
-                continue
-
-            else:
-                raise Exception(f"invalid identifier: " + token.chars)
-
-        result = (
-            '<link rel="stylesheet" href="../styles/main.css">'
-            + '\n<body class="bod">\n'
-            + result
-            + "\n</body>"
-        )
-
-        return result
+        # unreachable
 
     def add_token(
-        self, type_: str, chars: str, size=0, insert=False, position=None
+        self,
+        type: DocNodeType,
+        value=None,
     ) -> None:
         """
         add a token to the token to the token buffer
@@ -424,8 +465,8 @@ class PageParser(object):
             append  stick it at the end of the buffer
 
         attrs:
-            type_       Token Type
-            chars       the string we passed to the token
+            type_       DocNode Type
+            text       the string we passed to the token
             size        size of an token-specific identifier
             insert      mode insert
             position    ^ position to insert at
@@ -433,37 +474,8 @@ class PageParser(object):
         returns
             Nothing
         """
-        if isinstance(chars, str):
-            chars = chars.replace("\t", "&nbsp;&nbsp;&nbsp;&nbsp;")
-        try:
-            type_ = TokenType[type_]
-        except Exception:
-            # FATAL: tokentype unavaliable
-            raise Exception(f"Unavaliable Type: {str(type_)}")
 
-        if insert:
-            # we need to know where to stick this element
-            if position is None:
-                raise Exception("invalid position: None")
-
-            # insert into the position request, instead of at the end of the stack
-            self.tokens.insert(
-                position,
-                Token(
-                    type_,
-                    chars,
-                    size,
-                ),
-            )
-
-        # append as normal
-        self.tokens.append(
-            Token(
-                type_,
-                chars,
-                size,
-            )
-        )
+        self.doc_nodes.append(DocToken(type, value))
 
     def peek(self) -> str:
         """
@@ -492,7 +504,7 @@ class PageParser(object):
             raise Exception("You can't peek nothing")
 
         if amount + self.cursor >= len(self.file_buff):
-            IndexError("Cursor too close to end of file: amount + PageParser.cursor")
+            IndexError("Cursor too close to end of file: amount + PageLexer.cursor")
 
         # TODO: add boundary check
         return self.file_buff[self.cursor : self.cursor + amount]
@@ -554,13 +566,13 @@ class PageParser(object):
         # return the level of header
         self.cursor = tmp_cursor
 
-    def parse_page(self) -> object:
+    def lex_page(self) -> object:
         while True:
 
             # detecting the bounds of the line
             # if our cursor exceeds the bounds of the file_buff we can exit the parser
             if self.cursor >= len(self.file_buff):
-                return
+                break
 
             char = self.file_buff[self.cursor]
 
@@ -568,27 +580,26 @@ class PageParser(object):
             # in theory you could get around this by using comments
             if char == "\n" or char == "\r":
                 self.line += 1
-                self.add_token("newline", "\n")
+                self.add_token(DocNodeType["newline"], "\n")
 
             # grabbing full headings
             elif char == "#":
 
                 # returns how much of a heading there is
                 heading = self.grab_string()
-                size = heading.count("#")
 
-                heading = heading[size + 1 :]
-
-                self.add_token("atx_heading", heading, size)
+                self.add_token(DocNodeType["heading"], heading)
 
             elif char == "\\":
 
                 if self.peek() == "o":
-                    self.add_option()
+                    # self.add_option()
+                    ...
 
                 # Githug embeds
                 elif self.peek() == "c":
-                    self.add_option()
+                    # self.add_option()
+                    ...
 
                 else:
                     raise Exception(f"Unknown Option: {self.peek()}")
@@ -598,7 +609,7 @@ class PageParser(object):
                     # move two more characters forward
                     self.cursor += 3
                     block = self.read_block().replace("<", "&lt;").replace(">", "&gt;")
-                    self.add_token("code_block", block)
+                    self.add_token(DocNodeType["code_block"], block)
 
             elif char.isdigit():
                 # ordered list
@@ -608,19 +619,20 @@ class PageParser(object):
                     li_value = char
 
                     # we now can consume the next char
-                    self.cursor += 1
+                    # self.cursor += 1
 
-                    item = self.grab_string()[1:].strip(" ")
+                    item = self.grab_string()
 
                     # here we reuse the size of the node to specify the list item value
-                    self.add_token("list_item", item, li_value)
+                    self.add_token(DocNodeType["list_item"], item)
 
             elif char == "-":
-                # grab that comment
-                string = self.grab_string()[1:]
+                if self.peek_width(2) == "//":
+                    # grab that comment
+                    string = self.grab_string()[1:]
 
-                # add a list-comment token
-                self.add_token("list_item_comment", string)
+                    # add a list-comment token
+                    self.add_token(DocNodeType["list_item_comment"], string)
 
             # the posibility of a comment
             elif char == "/":
@@ -643,30 +655,35 @@ class PageParser(object):
 
                 # grab the full string any way, so that we don't consider '/' a comment
                 string = self.grab_string()
-                self.add_token("string", string)
+                self.add_token(DocNodeType["string"], string)
 
             # here we can just grab a full string
             elif self.is_char(char) or char == "\t":
 
                 string = self.grab_string()
 
-                self.add_token("string", string)
+                self.add_token(DocNodeType["string"], string)
 
             # go to the next char at the top of the scope
             self.cursor += 1
 
+        return self.doc_nodes
+
 
 if __name__ == "__main__":
     with open("../examples/compiler.md", "r") as fd:
-        page = PageParser(fd)
+        page = PageLexer(fd)
 
         with open("index.html", "w+") as fd:
             print("Compiling Page")
-            final = page.render()
+            tokens = page.lex_page()
+            parser = PageParser(tokens)
+            final = parser.render()
             if "--debug" in sys.argv:
-                for node in page.tokens:
+                for node in page.doc_nodes:
                     print(node)
-            print("Compliation Complete!")
-            fd.write(final)
+            print("Nodes Processed:", len(page.doc_nodes))
+            print("Compliation Complete!\n")
+            fd.write(final)  # pyright: ignore
 
     sys.exit(0)
