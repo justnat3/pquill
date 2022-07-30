@@ -12,42 +12,7 @@ __author__ = "Nathan Reed <nreed@linux.com>"
 
 from dataclasses import dataclass, field
 from enum import Enum
-# all text related DocNode's should have the strings attached to them
-# this is so we can more easily craft the page in the end
-# we are not really trying to create a commonmark implementation
-# this is just a page renderer based on markdown iteself
-# I think that explains it
-
-# comments should be respected as long as they are not apart of a heading
-# or really any other DocNode that has text attached to it
-# for example we should parse this a comment
-# \\ this is a comment t
-# and not this
-# ### this looks like a header \\ but has a "comment" in it
-
-# I think that there should be some text that represents some form of a "struct"
-# in the page to defined things like styles perhaps the following
-# options: { style: "<style here>", page_name: "page name here", "favicon"} etc
-
-# I think that it will do nicely like that to have some keyword to tell the renderer
-# what to do for global styles and titles, heading data really
-
-# I think we can use like a "link: {/path/to/other/page}" thing to link pages together
-
-# I also think that we should have a way of determining if something is actually a keyword
-# like "\options: {}" having a escape char before the keyword so its not parsed wrong
-
-# TODO: Styles plan
-# we have a defined set of css classes
-# we have a init for the static site generator to make sure all the paths are there
-# based on the classes we can define colors
-#   the sites should for the most part be in the same format
-
-
-from dataclasses import dataclass
-from enum import Enum
 import sys
-
 
 class DocNodeType(Enum):
     """
