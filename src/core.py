@@ -112,7 +112,7 @@ class DocNode(object):
     # I dont think that i fucked up the order on this 
     type: DocNodeType
     successors: list = field(default=None)
-    depth: int = 1
+    depth: int = field(default=1)
     ordered: bool = True
     text: str  = ""
 
@@ -122,9 +122,6 @@ class DocNode(object):
         # implement defualts 
         if not bool(self.successors):
             self.successors = []
-
-        if not bool(self.depth):
-            self.depth = 1
 
         if not bool(self.ordered):
             self.ordered = True
@@ -232,32 +229,34 @@ class PageParser(object):
             # and the last node is not a list
             # then add a list with the list item as its child
             if token.type is DocNodeType.list_item:
-                print("Created List")
                 if self.tree.successors[-1].type is not DocNodeType._list:
                     index = token.value.index(".")
-                    d = token.value[: index + 1].strip(".")
+                    d = int(token.value[0])
+                    print(d)
+                    token.value = token.value[index+2:]
                     node = DocNode(
                         DocNodeType._list,
                             [
                                 DocNode(
                                     DocNodeType.list_item, 
-                                    [DocNode(DocNodeType.text, text=token.value, depth=d)]
+                                    [DocNode(DocNodeType.text, text=token.value)]
                             )
                         ],
                     )
+                    node.depth = d
                     self.tree.successors.append(node)
                     continue
 
                 elif token.type is DocNodeType.list_item:
                     index = token.value.index(".")
-                    d = token.value[: index + 1].strip(".")
-                    token.value = token.value[index:]
+                    d = int(token.value[0])
+                    token.value = token.value[index+2:]
 
                     node = DocNode(
                         DocNodeType.list_item,
-                        [DocNode(type=DocNodeType.text, text=token.value, depth=d)],
+                        [DocNode(type=DocNodeType.text, text=token.value)],
                     )
-                    print(node.successors)
+                    node.depth = d
 
                     assert (
                         self.tree.successors[-1].type == DocNodeType._list
@@ -346,8 +345,9 @@ class PageParser(object):
                     PageHeading = "<div class='PageHeadline'>"
                     PageHeadingEnd = "</div>"
 
+                    # uh oh TODO: fix me 
                     # closing tag at end of scope
-                    ArticleText = "<div class='ArticleText'>"
+                    ArticleText = "<div style='margin-left: 20px;' class='ArticleText'>"
 
                     heading = f"<h{child.depth}>"
                     end = f"</h{child.depth}>"
@@ -357,7 +357,7 @@ class PageParser(object):
                     headline = True
 
                     text = child.successors[0].text
-                    line = PageHeading + heading + text + end + PageHeadingEnd
+                    line = PageHeading + heading + text + end + PageHeadingEnd + ArticleText
 
                     self.add_html_block(line)
                     continue
@@ -386,6 +386,7 @@ class PageParser(object):
 
                         body = list_item.successors[0].text
 
+                        print("depth", list_item.depth)
                         line = self.create_html_block(
                             f"<li value='{list_item.depth}'>",
                             body,
@@ -441,7 +442,6 @@ class PageParser(object):
             "<head>"
             + "\n<link rel='stylesheet' href='../styles/skeleton.css'>"
             + "\n<link rel='stylesheet' href='../styles/pure.css'>"
-            + "\n<link rel='stylesheet' href='//fonts.googleapis.com/css?family=Source+Sans+Pro'>"
             + "\n<link rel='stylesheet' href='../styles/grid.css'>"
             + "\n</head>"
             + "\n<body color='#fff' link='Blue', vlink='Green' alink='Green'>"
@@ -449,7 +449,7 @@ class PageParser(object):
             + "\n<div class='lwn-u-1 pure-u-md-19-24'>"
         )
         if headline is True:
-            end_page = "</div>" + "\n</div>" + "\n</div>" + "\n</body>"
+            end_page = "</div>" + "\n</div>" + "\n</div>" + "\n</div>" + "\n</body>"
         else:
             "</div>" + "\n</div>" + "\n</body>"
 
