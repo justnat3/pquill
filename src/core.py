@@ -10,10 +10,8 @@
 
 __author__ = "Nathan Reed <nreed@linux.com>"
 
-<<<<<<< HEAD
 from dataclasses import dataclass, field
 from enum import Enum
-=======
 # all text related DocNode's should have the strings attached to them
 # this is so we can more easily craft the page in the end
 # we are not really trying to create a commonmark implementation
@@ -46,12 +44,8 @@ from enum import Enum
 #   the sites should for the most part be in the same format
 
 
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from io import TextIOWrapper
-import json
-import json
->>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
+from dataclasses import dataclass
+from enum import Enum
 import sys
 
 
@@ -191,14 +185,7 @@ class PageParser(object):
         self.tree = DocNode(DocNodeType.root)
 
     def add_html_block(self, tag):
-<<<<<<< HEAD
         self.page.append(tag)
-
-    def create_html_block(self, start, body, end):
-        return start + body + end
-=======
-        self.page += tag
->>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
 
     def create_html_block(self, start, body, end):
         return start + body + end
@@ -362,17 +349,10 @@ class PageParser(object):
                     # uh oh TODO: fix me
                     # closing tag at end of scope
                     ArticleText = "<div style='margin-left: 20px;' class='ArticleText'>"
-<<<<<<< HEAD
 
                     heading = f"<h{child.depth}>"
                     end = f"</h{child.depth}>"
 
-=======
-
-                    heading = f"<h{child.depth}>"
-                    end = f"</h{child.depth}>"
-
->>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
                     # set headline state
                     headline = True
 
@@ -566,11 +546,8 @@ class PageLexer(object):
             if self.lookahead_ptr + self.cursor >= len(self.file_buff):
 
                 # grab the last char
-<<<<<<< HEAD
                 result.append(self.file_buff[-1])
-=======
-                result += self.file_buff[-1]
->>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
+
                 self.line += 1
                 self.column = 0
 
