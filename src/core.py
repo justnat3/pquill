@@ -1,50 +1,83 @@
 #!/usr/bin/env python3
+import pdb
 
 #   \title      core.py
 #
 #   \author     Nathan Reed <nreed@linux.com>
 #
-#   \desc       This is a simple markdown page parser for a blog site
+#   \dsec       This is a simple markdown page parser for a blog site
 #
 #   \license    MIT
 
-__author__ = "Nathan Reed <nreed@linux.com>"
+# NOTE: ITEMS
+# i'm trying not to just mindless code here, I want this to be somewhat stable
+# so here are some markers that I want for the page renderer
+
+# all text related DocNode's should have the strings attached to them
+# this is so we can more easily craft the page in the end
+# we are not really trying to create a commonmark implementation
+# this is just a page renderer based on markdown iteself
+# I think that explains it
+
+# comments should be respected as long as they are not apart of a heading
+# or really any other DocNode that has text attached to it
+# for example we should parse this a comment
+# \\ this is a comment t
+# and not this
+# ### this looks like a header \\ but has a "comment" in it
+
+# I think that there should be some text that represents some form of a "struct"
+# in the page to defined things like styles perhaps the following
+# options: { style: "<style here>", page_name: "page name here", "favicon"} etc
+
+# I think that it will do nicely like that to have some keyword to tell the renderer
+# what to do for global styles and titles, heading data really
+
+# I think we can use like a "link: {/path/to/other/page}" thing to link pages together
+
+# I also think that we should have a way of determining if something is actually a keyword
+# like "\options: {}" having a escape char before the keyword so its not parsed wrong
+
+# TODO: Styles plan
+# we have a defined set of css classes
+# we have a init for the static site generator to make sure all the paths are there
+# based on the classes we can define colors
+#   the sites should for the most part be in the same format
+
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, auto
+from io import TextIOWrapper
+import json
+import json
 import sys
 
-class DocNodeType(Enum):
-    """
-        Types for parser primatives 
 
-        list_item_comment   just a list_item nested list 
-        code_block          anything wrapped in ```<lang>
-        identifier          
-    """
+class DocNodeType(Enum):
     list_item_comment = auto()
-    code_block = auto()
-    identifier = auto()
-    list_item = auto()
-    paragraph = auto()  
-    comment = auto() 
-    heading = auto()  
-    newline = auto()  
-    _list = auto()
-    text = auto()
-    tab = auto()  
     root = auto()
+
+    list_item = auto()
+    code_block = auto()
+    identifier = auto()  # \options: {}
+    comment = auto()  # //
+    heading = auto()  # NODE("#")
+    newline = auto()  # \n
+    paragraph = auto()  # "this is a string" || this is a string
+    tab = auto()  # \t perhaps this is a entity_char
+    text = auto()
+    _list = auto()
+    # we do not current support html this could be "unsafe"
+    # block = auto()  # <li> <ul> => NODE("-")
 
 
 class PageLexerError(object):
     """
         A parser error type
-
     args
         message     Explaining what error the
         position    position of the cursor
         line        line where the error occurred
-
     """
 
     def __init__(self, message: str, position: int, line: int):
@@ -60,12 +93,10 @@ class PageLexerError(object):
 class DocToken:
     """
     Defining what a parser token looks like
-
     args
         type        (* enum)DocNodeType
         Value       str representing the lexme
     """
-
     type: DocNodeType
     value: str
 
@@ -75,17 +106,17 @@ class DocToken:
 
 @dataclass(init=True)
 class DocNode(object):
-    # I dont think that i fucked up the order on this
+    # I dont think that i fucked up the order on this 
     type: DocNodeType
     successors: list = field(default=None)
     depth: int = field(default=1)
     ordered: bool = True
-    text: str = ""
+    text: str  = ""
 
-    def __post_init__(self):
+    def __post_init__(self): 
         assert DocNodeType, "DocnodeType not defined"
 
-        # implement defualts
+        # implement defualts 
         if not bool(self.successors):
             self.successors = []
 
@@ -94,6 +125,7 @@ class DocNode(object):
 
         if not bool(self.text):
             self.text = ""
+
 
     def __str__(self):
         return str(self.type)
@@ -113,22 +145,16 @@ class PageFormatTypes(Enum):
     """
     Types for the way that we parse page section colors
     + how we define page format
-
         .. Page Format: as defined below
-
     div* class("pure-grid maincolumn")
         div* class("lwn-u-1 pure-u-md-19-24")
             PageHeadline
                 Starting feature text has no tag or class
-
             div* class("ArticleText")
-
                 Paragraphs
                     paragraph tag no class
-
                 Quotes
                     blockquote* class("bq")
-
     FUTURE: FeatureByLIne
         author
         date
@@ -146,46 +172,38 @@ class PageFormatTypes(Enum):
 class PageParser(object):
     def __init__(self, doc_nodes):
         self.doc_nodes: list = doc_nodes
-        self.page: list = []
+        self.page: str = ""
         self.tree = DocNode(DocNodeType.root)
 
     def add_html_block(self, tag):
-        self.page.append(tag)
+        self.page += tag
 
     def create_html_block(self, start, body, end):
         return start + body + end
 
+
     def render(self):
         """
         The way we render the page
-
             .. Page Format: as defined below
-
         div* class("pure-grid maincolumn")
             div* class("lwn-u-1 pure-u-md-19-24")
                 PageHeadline
                     Starting feature text has no tag or class
-
                 div* class("ArticleText")
-
                     Paragraphs
                         paragraph tag no class
-
                     Quotes
                         blockquote* class("bq")
-
         FUTURE: FeatureByLIne
             author
             date
             TODO: description
             Render the page
-
         attrs
             none    self
-
         returns
             none
-
         """
 
         for idx, token in enumerate(self.doc_nodes):
@@ -197,13 +215,13 @@ class PageParser(object):
                     index = token.value.index(".")
                     d = int(token.value[0])
                     print(d)
-                    token.value = token.value[index + 2 :]
+                    token.value = token.value[index+2:]
                     node = DocNode(
                         DocNodeType._list,
-                        [
-                            DocNode(
-                                DocNodeType.list_item,
-                                [DocNode(DocNodeType.text, text=token.value)],
+                            [
+                                DocNode(
+                                    DocNodeType.list_item, 
+                                    [DocNode(DocNodeType.text, text=token.value)]
                             )
                         ],
                     )
@@ -214,7 +232,7 @@ class PageParser(object):
                 elif token.type is DocNodeType.list_item:
                     index = token.value.index(".")
                     d = int(token.value[0])
-                    token.value = token.value[index + 2 :]
+                    token.value = token.value[index+2:]
 
                     node = DocNode(
                         DocNodeType.list_item,
@@ -241,16 +259,14 @@ class PageParser(object):
                 # we dont strip it when we translate the header into HTML because
                 # that would be a waste of cycles, you would have to do it in multiple places
                 node = DocNode(
-                    DocNodeType.heading,
-                    [
-                        DocNode(
-                            DocNodeType.text, text=token.value.strip("#"), depth=depth
-                        )
-                    ],
+                        DocNodeType.heading,
+                        [DocNode(DocNodeType.text, text=token.value.strip("#"), depth=depth)],
+                    )
+                self.tree.successors.append(
+                    node
                 )
-                self.tree.successors.append(node)
                 continue
-
+            
             elif token.type is DocNodeType.paragraph:
                 self.tree.successors.append(
                     DocNode(
@@ -278,8 +294,8 @@ class PageParser(object):
         headline = False
         for idx, child in enumerate(self.tree.successors):
             print("NEXT_TOP_NODE\t", hex(id(child)), "  ", child.type)
-
-            # Headings
+            
+            # Headings 
             if child.type is DocNodeType.heading:
                 # ensure depth
                 assert child.depth, "No Depth found for header"
@@ -292,7 +308,7 @@ class PageParser(object):
 
                 # TODO: fix header depth
                 if headline is True and child.depth == 1:
-                    # bad fix for subheaders
+                    # bad fix for subheaders 
                     child.depth += 1
 
                     text = child.successors[0].text
@@ -311,25 +327,19 @@ class PageParser(object):
                     PageHeading = "<div class='PageHeadline'>"
                     PageHeadingEnd = "</div>"
 
-                    # uh oh TODO: fix me
+                    # uh oh TODO: fix me 
                     # closing tag at end of scope
                     ArticleText = "<div style='margin-left: 20px;' class='ArticleText'>"
 
                     heading = f"<h{child.depth}>"
                     end = f"</h{child.depth}>"
 
+
                     # set headline state
                     headline = True
 
                     text = child.successors[0].text
-                    line = (
-                        PageHeading
-                        + heading
-                        + text
-                        + end
-                        + PageHeadingEnd
-                        + ArticleText
-                    )
+                    line = PageHeading + heading + text + end + PageHeadingEnd + ArticleText
 
                     self.add_html_block(line)
                     continue
@@ -360,7 +370,9 @@ class PageParser(object):
 
                         print("depth", list_item.depth)
                         line = self.create_html_block(
-                            f"<li value='{list_item.depth}'>", body, "</li>"
+                            f"<li value='{list_item.depth}'>",
+                            body,
+                            "</li>"
                         )
 
                         self.add_html_block(line)
@@ -372,7 +384,11 @@ class PageParser(object):
             elif child.type is DocNodeType.paragraph:
                 block = child.successors[0].text
 
-                line = self.create_html_block("<p>", block, "</p>")
+                line = self.create_html_block(
+                    "<p>", 
+                    block,
+                    "</p>"
+                )
 
                 self.add_html_block(line)
                 continue
@@ -381,9 +397,9 @@ class PageParser(object):
                 # check string DocNode access
                 assert bool(child.successors[0].text)
 
-                # access string once and only once
+                # access string once and only once 
                 block = child.successors[0].text
-
+                
                 # find the first new line to rid ```<lang>
                 index = block.find("\n")
 
@@ -419,13 +435,13 @@ class PageParser(object):
         else:
             "</div>" + "\n</div>" + "\n</body>"
 
-        return start_page + "\n".join(self.page) + end_page
+
+        return start_page + self.page + end_page
 
 
 class PageLexer(object):
     """
     our global parser object
-
     lookahead_ptr   a pointer to look ahead of the cursor temporarily
     _has_errors     defining what the parser ran into during scans
     file_buff       text from the source file
@@ -455,10 +471,8 @@ class PageLexer(object):
         """
             parse the styles option
             this is also to validate whether the stylesheet is valid
-
         args
             path    a path to the stylesheet
-
         returns
             a style sheet
         """
@@ -467,10 +481,8 @@ class PageLexer(object):
     def create_error(self, msg: str) -> None:
         """
             Create a new PageLexer error
-
         attrs
             msg message to say what the error is, and if we can continue
-
         returns
             PageLexerError(class)
         """
@@ -480,7 +492,6 @@ class PageLexer(object):
         """
         attrs
             character to process
-
         Returns
             whether something is a alpha-character or not
         """
@@ -493,16 +504,13 @@ class PageLexer(object):
     def grab_string(self) -> str:
         """
             collecting a full string either to a new line or to EOF
-
         attrs
             in class
-
         Returns
             str     full string to collect
         """
         # store the current char that is a char
-        result: list = []
-        result.append(self.file_buff[self.cursor])
+        result: str = self.file_buff[self.cursor]
 
         self.lookahead_ptr = 1
         while True:
@@ -511,14 +519,13 @@ class PageLexer(object):
             if self.lookahead_ptr + self.cursor >= len(self.file_buff):
 
                 # grab the last char
-                result.append(self.file_buff[-1])
-
+                result += self.file_buff[-1]
                 self.line += 1
                 self.column = 0
 
                 # give the resulting string back
                 self.cursor = (self.lookahead_ptr + self.cursor) - 1
-                return "".join(result)
+                return result
 
             # if we reached the end of the line then we result the result
             if self.file_buff[self.cursor + self.lookahead_ptr] == "\n":
@@ -529,10 +536,10 @@ class PageLexer(object):
                 self.cursor = self.lookahead_ptr + self.cursor
 
                 # we should have the last char at this point
-                return "".join(result)
+                return result
 
             # get the next char
-            result.append(self.file_buff[self.cursor + self.lookahead_ptr])
+            result += self.file_buff[self.cursor + self.lookahead_ptr]
 
             # the next char
             self.lookahead_ptr += 1
@@ -547,18 +554,15 @@ class PageLexer(object):
     ) -> None:
         """
         add a token to the token to the token buffer
-
         modes:
             insert  slot in a token at an index
             append  stick it at the end of the buffer
-
         attrs:
             type_       DocNode Type
             text       the string we passed to the token
             size        size of an token-specific identifier
             insert      mode insert
             position    ^ position to insert at
-
         returns
             Nothing
         """
@@ -568,10 +572,8 @@ class PageLexer(object):
     def peek(self) -> str:
         """
             peek at the next character in the file buffer is there is room
-
         args
             none
-
         returns
             the next char in the file buffer
         """
@@ -581,10 +583,8 @@ class PageLexer(object):
     def peek_width(self, amount=2) -> str:
         """
             peek at the next character in the file buffer is there is room
-
         args
             amount  to peek with width
-
         returns
             the next char in the file buffer
         """
@@ -600,16 +600,13 @@ class PageLexer(object):
     def read_block(self) -> str:
         """
             collecting a full string either to a new line or to EOF
-
         attrs
             in class
-
         Returns
             str     full string to collect
         """
         # store the current char that is a char
-        result: list = []
-        result.append(self.file_buff[self.cursor])
+        result: str = self.file_buff[self.cursor]
 
         self.lookahead_ptr = 1
 
@@ -621,11 +618,11 @@ class PageLexer(object):
             if tmp_cursor >= len(self.file_buff):
 
                 # grab the last char
-                result.append(self.file_buff[-1])
+                result += self.file_buff[-1]
 
                 # give the resulting string back
                 self.cursor = (tmp_cursor) - 1
-                return "".join(result)
+                return result
 
             try:
                 # if we reached the end of the line then we result the result
@@ -639,13 +636,13 @@ class PageLexer(object):
                         self.column += 2
 
                         # we should have the last char at this point
-                        return "".join(result)
+                        return result
 
                     else:
                         continue
 
                 # get the next char
-                result.append(self.file_buff[tmp_cursor])
+                result += self.file_buff[tmp_cursor]
 
                 # the next char
                 self.lookahead_ptr += 1
@@ -676,8 +673,8 @@ class PageLexer(object):
             # grabbing full headings
             elif char == "#":
 
-                # gives us the entire header back, including the  #
-                # later we use this to strip out the #
+                # gives us the entire header back, including the  # 
+                # later we use this to strip out the # 
                 heading = self.grab_string()
                 assert heading, "grab_string() l659 returned nothing"
                 assert heading.__contains__("#"), "heading did not contain #"
@@ -753,14 +750,15 @@ class PageLexer(object):
             self.cursor += 1
             self.column += 1
 
+
         return self.doc_nodes
 
 
 if __name__ == "__main__":
-    with open(sys.argv[1], "r") as fd:
+    with open("../examples/compiler.md", "r") as fd:
         page = PageLexer(fd)
 
-        with open(sys.argv[2], "w+") as fd:
+        with open("index.html", "w+") as fd:
             print("Compiling Page")
             tokens = page.lex_page()
             parser = PageParser(tokens)
