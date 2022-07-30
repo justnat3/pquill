@@ -10,8 +10,48 @@
 
 __author__ = "Nathan Reed <nreed@linux.com>"
 
+<<<<<<< HEAD
 from dataclasses import dataclass, field
 from enum import Enum
+=======
+# all text related DocNode's should have the strings attached to them
+# this is so we can more easily craft the page in the end
+# we are not really trying to create a commonmark implementation
+# this is just a page renderer based on markdown iteself
+# I think that explains it
+
+# comments should be respected as long as they are not apart of a heading
+# or really any other DocNode that has text attached to it
+# for example we should parse this a comment
+# \\ this is a comment t
+# and not this
+# ### this looks like a header \\ but has a "comment" in it
+
+# I think that there should be some text that represents some form of a "struct"
+# in the page to defined things like styles perhaps the following
+# options: { style: "<style here>", page_name: "page name here", "favicon"} etc
+
+# I think that it will do nicely like that to have some keyword to tell the renderer
+# what to do for global styles and titles, heading data really
+
+# I think we can use like a "link: {/path/to/other/page}" thing to link pages together
+
+# I also think that we should have a way of determining if something is actually a keyword
+# like "\options: {}" having a escape char before the keyword so its not parsed wrong
+
+# TODO: Styles plan
+# we have a defined set of css classes
+# we have a init for the static site generator to make sure all the paths are there
+# based on the classes we can define colors
+#   the sites should for the most part be in the same format
+
+
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from io import TextIOWrapper
+import json
+import json
+>>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
 import sys
 
 
@@ -151,7 +191,14 @@ class PageParser(object):
         self.tree = DocNode(DocNodeType.root)
 
     def add_html_block(self, tag):
+<<<<<<< HEAD
         self.page.append(tag)
+
+    def create_html_block(self, start, body, end):
+        return start + body + end
+=======
+        self.page += tag
+>>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
 
     def create_html_block(self, start, body, end):
         return start + body + end
@@ -315,10 +362,17 @@ class PageParser(object):
                     # uh oh TODO: fix me
                     # closing tag at end of scope
                     ArticleText = "<div style='margin-left: 20px;' class='ArticleText'>"
+<<<<<<< HEAD
 
                     heading = f"<h{child.depth}>"
                     end = f"</h{child.depth}>"
 
+=======
+
+                    heading = f"<h{child.depth}>"
+                    end = f"</h{child.depth}>"
+
+>>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
                     # set headline state
                     headline = True
 
@@ -512,7 +566,11 @@ class PageLexer(object):
             if self.lookahead_ptr + self.cursor >= len(self.file_buff):
 
                 # grab the last char
+<<<<<<< HEAD
                 result.append(self.file_buff[-1])
+=======
+                result += self.file_buff[-1]
+>>>>>>> bef1e6429383d8103c30f57e01e7c67d109ec4ba
                 self.line += 1
                 self.column = 0
 
