@@ -100,6 +100,7 @@ class DocToken:
         type        (* enum)DocNodeType
         Value       str representing the lexme
     """
+
     type: DocNodeType
     value: str
 
@@ -109,17 +110,17 @@ class DocToken:
 
 @dataclass(init=True)
 class DocNode(object):
-    # I dont think that i fucked up the order on this 
+    # I dont think that i fucked up the order on this
     type: DocNodeType
     successors: list = field(default=None)
     depth: int = field(default=1)
     ordered: bool = True
-    text: str  = ""
+    text: str = ""
 
-    def __post_init__(self): 
+    def __post_init__(self):
         assert DocNodeType, "DocnodeType not defined"
 
-        # implement defualts 
+        # implement defualts
         if not bool(self.successors):
             self.successors = []
 
@@ -128,7 +129,6 @@ class DocNode(object):
 
         if not bool(self.text):
             self.text = ""
-
 
     def __str__(self):
         return str(self.type)
@@ -190,7 +190,6 @@ class PageParser(object):
     def create_html_block(self, start, body, end):
         return start + body + end
 
-
     def render(self):
         """
         The way we render the page
@@ -233,13 +232,13 @@ class PageParser(object):
                     index = token.value.index(".")
                     d = int(token.value[0])
                     print(d)
-                    token.value = token.value[index+2:]
+                    token.value = token.value[index + 2 :]
                     node = DocNode(
                         DocNodeType._list,
-                            [
-                                DocNode(
-                                    DocNodeType.list_item, 
-                                    [DocNode(DocNodeType.text, text=token.value)]
+                        [
+                            DocNode(
+                                DocNodeType.list_item,
+                                [DocNode(DocNodeType.text, text=token.value)],
                             )
                         ],
                     )
@@ -250,7 +249,7 @@ class PageParser(object):
                 elif token.type is DocNodeType.list_item:
                     index = token.value.index(".")
                     d = int(token.value[0])
-                    token.value = token.value[index+2:]
+                    token.value = token.value[index + 2 :]
 
                     node = DocNode(
                         DocNodeType.list_item,
@@ -277,14 +276,16 @@ class PageParser(object):
                 # we dont strip it when we translate the header into HTML because
                 # that would be a waste of cycles, you would have to do it in multiple places
                 node = DocNode(
-                        DocNodeType.heading,
-                        [DocNode(DocNodeType.text, text=token.value.strip("#"), depth=depth)],
-                    )
-                self.tree.successors.append(
-                    node
+                    DocNodeType.heading,
+                    [
+                        DocNode(
+                            DocNodeType.text, text=token.value.strip("#"), depth=depth
+                        )
+                    ],
                 )
+                self.tree.successors.append(node)
                 continue
-            
+
             elif token.type is DocNodeType.paragraph:
                 self.tree.successors.append(
                     DocNode(
@@ -312,8 +313,8 @@ class PageParser(object):
         headline = False
         for idx, child in enumerate(self.tree.successors):
             print("NEXT_TOP_NODE\t", hex(id(child)), "  ", child.type)
-            
-            # Headings 
+
+            # Headings
             if child.type is DocNodeType.heading:
                 # ensure depth
                 assert child.depth, "No Depth found for header"
@@ -326,7 +327,7 @@ class PageParser(object):
 
                 # TODO: fix header depth
                 if headline is True and child.depth == 1:
-                    # bad fix for subheaders 
+                    # bad fix for subheaders
                     child.depth += 1
 
                     text = child.successors[0].text
@@ -345,19 +346,25 @@ class PageParser(object):
                     PageHeading = "<div class='PageHeadline'>"
                     PageHeadingEnd = "</div>"
 
-                    # uh oh TODO: fix me 
+                    # uh oh TODO: fix me
                     # closing tag at end of scope
                     ArticleText = "<div style='margin-left: 20px;' class='ArticleText'>"
 
                     heading = f"<h{child.depth}>"
                     end = f"</h{child.depth}>"
 
-
                     # set headline state
                     headline = True
 
                     text = child.successors[0].text
-                    line = PageHeading + heading + text + end + PageHeadingEnd + ArticleText
+                    line = (
+                        PageHeading
+                        + heading
+                        + text
+                        + end
+                        + PageHeadingEnd
+                        + ArticleText
+                    )
 
                     self.add_html_block(line)
                     continue
@@ -388,9 +395,7 @@ class PageParser(object):
 
                         print("depth", list_item.depth)
                         line = self.create_html_block(
-                            f"<li value='{list_item.depth}'>",
-                            body,
-                            "</li>"
+                            f"<li value='{list_item.depth}'>", body, "</li>"
                         )
 
                         self.add_html_block(line)
@@ -402,11 +407,7 @@ class PageParser(object):
             elif child.type is DocNodeType.paragraph:
                 block = child.successors[0].text
 
-                line = self.create_html_block(
-                    "<p>", 
-                    block,
-                    "</p>"
-                )
+                line = self.create_html_block("<p>", block, "</p>")
 
                 self.add_html_block(line)
                 continue
@@ -415,9 +416,9 @@ class PageParser(object):
                 # check string DocNode access
                 assert bool(child.successors[0].text)
 
-                # access string once and only once 
+                # access string once and only once
                 block = child.successors[0].text
-                
+
                 # find the first new line to rid ```<lang>
                 index = block.find("\n")
 
@@ -452,7 +453,6 @@ class PageParser(object):
             end_page = "</div>" + "\n</div>" + "\n</div>" + "\n</div>" + "\n</body>"
         else:
             "</div>" + "\n</div>" + "\n</body>"
-
 
         return start_page + self.page + end_page
 
@@ -708,8 +708,8 @@ class PageLexer(object):
             # grabbing full headings
             elif char == "#":
 
-                # gives us the entire header back, including the  # 
-                # later we use this to strip out the # 
+                # gives us the entire header back, including the  #
+                # later we use this to strip out the #
                 heading = self.grab_string()
                 assert heading, "grab_string() l659 returned nothing"
                 assert heading.__contains__("#"), "heading did not contain #"
@@ -785,15 +785,14 @@ class PageLexer(object):
             self.cursor += 1
             self.column += 1
 
-
         return self.doc_nodes
 
 
 if __name__ == "__main__":
-    with open("../examples/compiler.md", "r") as fd:
+    with open(sys.argv[1], "r") as fd:
         page = PageLexer(fd)
 
-        with open("index.html", "w+") as fd:
+        with open(sys.argv[2], "w+") as fd:
             print("Compiling Page")
             tokens = page.lex_page()
             parser = PageParser(tokens)
