@@ -278,9 +278,8 @@ class PageParser(object):
                     PageHeading = "<div class='PageHeadline'>"
                     PageHeadingEnd = "</div>"
 
-                    # uh oh TODO: fix me
                     # closing tag at end of scope
-                    ArticleText = "<div style='margin-left: 20px;' class='ArticleText'>"
+                    ArticleText = "<div class='ArticleText'>"
 
                     heading = f"<h{child.depth}>"
                     end = f"</h{child.depth}>"
@@ -356,11 +355,18 @@ class PageParser(object):
                 # grab the rest of the block
                 string = block[index:]
 
-                # abstract into function
+                # create code_block
                 line = self.create_html_block(
                     "<pre>",
                     string,
                     "</pre>",
+                )
+
+                # wrap code block in div 
+                line = self.create_html_block(
+                    "<div class='code_block'>",
+                    line,
+                    "</div>"
                 )
 
                 self.add_html_block(line)
@@ -372,13 +378,12 @@ class PageParser(object):
 
         start_page = (
             "<head>"
+            + "\n <meta name='viewport' content='width=device-width, initial-scale=1'>"
             + "\n<link rel='stylesheet' href='../styles/skeleton.css'>"
-            + "\n<link rel='stylesheet' href='../styles/pure.css'>"
-            + "\n<link rel='stylesheet' href='../styles/grid.css'>"
             + "\n</head>"
-            + "\n<body color='#fff' link='Blue', vlink='Green' alink='Green'>"
-            + "\n<div class='pure-grid maincolumn'>"
-            + "\n<div class='lwn-u-1 pure-u-md-19-24'>"
+            + "\n<body class='bod'>"
+            + "\n<div>"
+            + "\n<div>"
         )
         if headline is True:
             end_page = "</div>" + "\n</div>" + "\n</div>" + "\n</div>" + "\n</body>"
