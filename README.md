@@ -16,7 +16,8 @@ As selfish as it sounds. It was made purely for myself- however it is also inden
 
 It looks like my [LWN](https://lwn.net) custom css profile. I read a lot of LWN and like the blog style, oldschool yellow coffee stain pages. 
 
-![image](https://user-images.githubusercontent.com/58314490/181938941-7567119b-40e4-4140-8aed-2678eb10719d.png)
+![image](https://user-images.githubusercontent.com/58314490/182042231-0083f9c4-2498-46d7-84ff-a37dbba64209.png)
+
 
 A static html page! wonderful
 
