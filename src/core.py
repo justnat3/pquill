@@ -58,7 +58,7 @@ class DocToken:
     type: DocNodeType
     value: str
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
         return {"type": str(self.type), "value": self.value}
 
 
@@ -87,7 +87,7 @@ class DocNode(object):
     def __str__(self):
         return str(self.type)
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
         return {
             "type": str(self.type),
             "successors": self.successors,
@@ -98,106 +98,74 @@ class DocNode(object):
         }
 
 
-class PageFormatTypes(Enum):
-    """
-    Types for the way that we parse page section colors
-    + how we define page format
-        .. Page Format: as defined below
-    div* class("pure-grid maincolumn")
-        div* class("lwn-u-1 pure-u-md-19-24")
-            PageHeadline
-                Starting feature text has no tag or class
-            div* class("ArticleText")
-                Paragraphs
-                    paragraph tag no class
-                Quotes
-                    blockquote* class("bq")
-    FUTURE: FeatureByLIne
-        author
-        date
-        TODO: description
-    """
-
-    # Required
-    GridMainColumn = object()
-    Start = object()
-    PageHeadline = object()  # Div->H2
-    ArticleTextDiv = object()  # Div->text
-    # Optional
-
-
 class PageParser(object):
     def __init__(self, doc_nodes):
         self.doc_nodes: list = doc_nodes
-        self.page: str = ""
+        self.page: list = []
         self.tree = DocNode(DocNodeType.root)
 
-    def add_html_block(self, tag):
-        self.page += tag
+    def add_html_block(self, tag) -> None:
+        self.page.append(tag)
 
-    def create_html_block(self, start, body, end):
+    def create_html_block(self, start, body, end) -> None:
         return start + body + end
 
-    def render(self):
-        """
-        The way we render the page
-            .. Page Format: as defined below
-        div* class("pure-grid maincolumn")
-            div* class("lwn-u-1 pure-u-md-19-24")
-                PageHeadline
-                    Starting feature text has no tag or class
-                div* class("ArticleText")
-                    Paragraphs
-                        paragraph tag no class
-                    Quotes
-                        blockquote* class("bq")
-        FUTURE: FeatureByLIne
-            author
-            date
-            TODO: description
-            Render the page
-        attrs
-            none    self
-        returns
-            none
-        """
+    def define_list_item(self, text):
+        index_after_depth = text.index(".")
+        depth = int(text[0])
+
+        assert depth
+        assert index_after_depth
+
+        list_text = text[index_after_depth + 2 :]
+
+        return set(depth, list_text)
+
+    def create_ir(self) -> None:
 
         for idx, token in enumerate(self.doc_nodes):
-            # if the node is a list item
-            # and the last node is not a list
-            # then add a list with the list item as its child
             if token.type is DocNodeType.list_item:
+
+                # if the we don't already have a list in the tree
+                # then go ahead and create one 
                 if self.tree.successors[-1].type is not DocNodeType._list:
-                    index = token.value.index(".")
-                    d = int(token.value[0])
-                    token.value = token.value[index + 2 :]
+
+                    # grab the depth and the text for the list item
+                    depth, text = self.define_list_item(token.value)
+
                     node = DocNode(
                         DocNodeType._list,
                         [
                             DocNode(
                                 DocNodeType.list_item,
-                                [DocNode(DocNodeType.text, text=token.value)],
+                                [DocNode(DocNodeType.text, text=text)],
                             )
                         ],
                     )
+
                     node.depth = d
                     self.tree.successors.append(node)
+
                     continue
 
+                # if we dont need to create the head of the list
+                # then we can append to the _list behind it 
                 elif token.type is DocNodeType.list_item:
-                    index = token.value.index(".")
-                    d = int(token.value[0])
-                    token.value = token.value[index + 2 :]
+
+                    # grab the depth and the text for the list item
+                    depth, text = self.define_list_item(token.value)
 
                     node = DocNode(
                         DocNodeType.list_item,
-                        [DocNode(type=DocNodeType.text, text=token.value)],
+                        [DocNode(type=DocNodeType.text, text=text)],
                     )
-                    node.depth = d
 
+                    node.depth = depth
+
+                    # append to _list and freak out if there is not one
                     assert (
-                        self.tree.successors[-1].type == DocNodeType._list
-                    ), f"did not find list instead found {self.tree.successors[-1].type}"
+                        self.tree.successors[-1].type is DocNodeType._list
+                    ), f"expected _list found {self.tree.successors[-1].type}"
 
                     self.tree.successors[-1].successors.append(node)
 
@@ -248,9 +216,35 @@ class PageParser(object):
             else:
                 pass
 
+    def render(self) -> str:
+        """
+        The way we render the page
+            .. Page Format: as defined below
+        div* class("pure-grid maincolumn")
+            div* class("lwn-u-1 pure-u-md-19-24")
+                PageHeadline
+                    Starting feature text has no tag or class
+                div* class("ArticleText")
+                    Paragraphs
+                        paragraph tag no class
+                    Quotes
+                        blockquote* class("bq")
+        FUTURE: FeatureByLIne
+            author
+            date
+            TODO: description
+            Render the page
+        attrs
+            none    self
+        returns
+            none
+        """
+
+        self.create_ir()
+
         headline = False
         for idx, child in enumerate(self.tree.successors):
-            print("NEXT_TOP_NODE\t", hex(id(child)), "  ", child.type)
+            print("COMPILING    ", hex(id(child)), "  ", child.type)
 
             # Headings
             if child.type is DocNodeType.heading:
@@ -326,12 +320,11 @@ class PageParser(object):
 
                     if list_item.type is DocNodeType.list_item:
                         assert (
-                            list_item.successors[0].type == DocNodeType.text
+                            list_item.successors[0].type is DocNodeType.text
                         ), f"successors type for list was not text, found {list_item.successors[0].type}"
 
                         body = list_item.successors[0].text
 
-                        print("depth", list_item.depth)
                         line = self.create_html_block(
                             f"<li value='{list_item.depth}'>", body, "</li>"
                         )
@@ -392,7 +385,7 @@ class PageParser(object):
         else:
             "</div>" + "\n</div>" + "\n</body>"
 
-        return start_page + self.page + end_page
+        return start_page + "".join(self.page) + end_page
 
 
 class PageLexer(object):
@@ -408,7 +401,7 @@ class PageLexer(object):
     fd              a hidden file descriptor for our source file
     """
 
-    def __init__(self, file_buff: TextIOWrapper):
+    def __init__(self, file_buff):
         self.file_buff = file_buff.read()
         self.lookahead_ptr = 0
         self._has_errors = []
@@ -418,31 +411,33 @@ class PageLexer(object):
         self.column = 0
         self.line = 0
 
-    def __str__(self):
-        """creating the final page"""
+    def check_lookahead_bounds(self) -> bool:
+        return (
+            True if (self.lookahead_ptr + self.cursor >= len(self.file_buff)) else False
+        )
 
-        # create the page
+    def check_bound_with_int(self, control: int) -> bool:
+        return True if control >= len(self.file_buff) else False
 
-    def styles(self, path: str) -> None:
-        """
-            parse the styles option
-            this is also to validate whether the stylesheet is valid
-        args
-            path    a path to the stylesheet
-        returns
-            a style sheet
-        """
-        ...
+    def check_lookahead_for_newline(self) -> bool:
+        return (
+            True if self.file_buff[self.cursor + self.lookahead_ptr] == "\n" else False
+        )
 
-    def create_error(self, msg: str) -> None:
-        """
-            Create a new PageLexer error
-        attrs
-            msg message to say what the error is, and if we can continue
-        returns
-            PageLexerError(class)
-        """
-        error = None
+    def advance_line_counter(self, amount=1) -> None:
+        self.line += amount
+
+    def advance_column_counter(self, amount=1) -> None:
+        self.column += amount
+
+    def advance_cursor(self, amount=1) -> None:
+        assert amount != 0, "cannot move cursor 0"
+        assert isinstance(amount, int), f"amount not int, found {type(amount)}"
+
+        self.cursor += amount
+
+    def reset_column_counter(self) -> None:
+        self.column = 0
 
     def is_char(self, char: str) -> bool:
         """
@@ -466,36 +461,40 @@ class PageLexer(object):
             str     full string to collect
         """
         # store the current char that is a char
-        result: str = self.file_buff[self.cursor]
+        result: list = []
+        result.append(self.file_buff[self.cursor])
 
         self.lookahead_ptr = 1
         while True:
 
             # if grab_string happens to touch the edge of the file buffer
-            if self.lookahead_ptr + self.cursor >= len(self.file_buff):
+            if self.check_lookahead_bounds():
 
                 # grab the last char
-                result += self.file_buff[-1]
-                self.line += 1
+                result.append(self.file_buff[-1])
+
+                # advance cursor and reset column counter 
+                self.advance_line_counter()
                 self.column = 0
 
                 # give the resulting string back
                 self.cursor = (self.lookahead_ptr + self.cursor) - 1
-                return result
+
+                return "".join(result)
 
             # if we reached the end of the line then we result the result
-            if self.file_buff[self.cursor + self.lookahead_ptr] == "\n":
-                self.line += 1
+            if self.check_lookahead_for_newline():
+                self.advance_line_counter()
                 self.column = 0
 
                 # reset the position cursor
                 self.cursor = self.lookahead_ptr + self.cursor
 
                 # we should have the last char at this point
-                return result
+                return "".join(result)
 
             # get the next char
-            result += self.file_buff[self.cursor + self.lookahead_ptr]
+            result.append(self.file_buff[self.cursor + self.lookahead_ptr])
 
             # the next char
             self.lookahead_ptr += 1
@@ -533,7 +532,6 @@ class PageLexer(object):
         returns
             the next char in the file buffer
         """
-        # TODO: add boundary check
         return self.file_buff[self.cursor + 1]
 
     def peek_width(self, amount=2) -> str:
@@ -544,13 +542,8 @@ class PageLexer(object):
         returns
             the next char in the file buffer
         """
-        if amount == 0:
-            raise Exception("You can't peek nothing")
+        assert amount != 0, "you cannot peek ahead 0"
 
-        if amount + self.cursor >= len(self.file_buff):
-            IndexError("Cursor too close to end of file: amount + PageLexer.cursor")
-
-        # TODO: add boundary check
         return self.file_buff[self.cursor : self.cursor + amount]
 
     def read_block(self) -> str:
@@ -562,59 +555,61 @@ class PageLexer(object):
             str     full string to collect
         """
         # store the current char that is a char
-        result: str = self.file_buff[self.cursor]
+        block: list = []
+        block.append(self.file_buff[self.cursor])
 
         self.lookahead_ptr = 1
 
         while True:
 
-            tmp_cursor = self.cursor + self.lookahead_ptr
+            lookahead_cursor = self.cursor + self.lookahead_ptr
 
             # if grab_string happens to touch the edge of the file buffer
-            if tmp_cursor >= len(self.file_buff):
+            if self.check_bound_with_int(lookahead_cursor):
 
                 # grab the last char
-                result += self.file_buff[-1]
+                block.append(self.file_buff[-1])
 
-                # give the resulting string back
-                self.cursor = (tmp_cursor) - 1
-                return result
+                self.cursor = (lookahead_cursor) - 1
+
+                # give the resulting block back
+                return "".join(block)
 
             try:
-                # if we reached the end of the line then we result the result
-                if self.file_buff[tmp_cursor] == "`":
+                # if we reached the end of the line then we return the result
+                if self.file_buff[lookahead_cursor] == "`":
 
                     # reset the position cursor
-                    self.cursor = tmp_cursor
+                    self.cursor = lookahead_cursor
 
                     if self.peek_width() == "``":
-                        self.cursor += 2
-                        self.column += 2
+                        self.advance_cursor(2)
+                        self.advance_column_counter(2)
 
                         # we should have the last char at this point
-                        return result
+                        return "".join(block)
 
                     else:
                         continue
 
                 # get the next char
-                result += self.file_buff[tmp_cursor]
+                block.append(self.file_buff[lookahead_cursor])
 
                 # the next char
                 self.lookahead_ptr += 1
 
-            except Exception:
-                raise Exception("did not find edege of block")
+            except:
+                raise
 
         # return the level of header
-        self.cursor = tmp_cursor
+        self.cursor = lookahead_cursor
 
     def lex_page(self) -> list:
         while True:
 
             # detecting the bounds of the line
             # if our cursor exceeds the bounds of the file_buff we can exit the parser
-            if self.cursor >= len(self.file_buff):
+            if self.check_bound_with_int(self.cursor):
                 break
 
             char = self.file_buff[self.cursor]
@@ -622,9 +617,8 @@ class PageLexer(object):
             # I think it would be nice to honor newlines
             # in theory you could get around this by using comments
             if char == "\n" or char == "\r":
-                self.line += 1
-                self.column = 0
-                # self.add_token(DocNodeType["newline"], "\n")
+                self.advance_line_counter()
+                self.reset_column_counter()
 
             # grabbing full headings
             elif char == "#":
@@ -654,8 +648,8 @@ class PageLexer(object):
             elif char == "`":
                 if self.peek_width(2) == "``":
                     # move two more characters forward
-                    self.cursor += 3
-                    self.column += 3
+                    self.advance_cursor(3)
+                    self.advance_column_counter(3)
                     block = self.read_block().replace("<", "&lt;").replace(">", "&gt;")
                     self.add_token(DocNodeType["code_block"], block)
 
@@ -671,40 +665,43 @@ class PageLexer(object):
             elif char == "-":
                 if self.peek_width(2) == "//":
                     # grab that comment
-                    string = self.grab_string()[1:]
-                    assert string, "string l699 returned nothing"
+                    option = self.grab_string()[1:]
+                    assert option, "string returned nothing"
 
                     # add a list-comment token
-                    self.add_token(DocNodeType["list_item_comment"], string)
+                    self.add_token(DocNodeType["list_item_comment"], option)
 
-            # the posibility of a comment
+            # grab comment or paragraph
             elif char == "/":
                 # make sure that the next char in the line is a comment
-                # for actual text we can ignore this later
                 if self.peek() == "/":
 
                     # we have to advance the cursor here because otherwise we would
                     # have an infinite loop
-                    self.cursor += 1
-                    self.column += 1
+                    self.advance_cursor()
+                    self.advance_column_counter()
+
+                    # throw away string to seek to a good point in the file
+                    _ = self.grab_string()
+
                     continue
 
                 # grab the full string any way, so that we don't consider '/' a comment
-                string = self.grab_string()
+                paragraph = self.grab_string()
                 assert string, "string returned nothing"
-                self.add_token(DocNodeType["paragraph"], string)
+                self.add_token(DocNodeType["paragraph"], paragraph)
 
             # here we can just grab a full string
             elif self.is_char(char) or char == "\t":
 
-                string = self.grab_string()
-                assert string, ""
+                paragraph = self.grab_string()
+                assert paragraph
 
-                self.add_token(DocNodeType["paragraph"], string)
+                self.add_token(DocNodeType["paragraph"], paragraph)
 
             # go to the next char at the top of the scope
-            self.cursor += 1
-            self.column += 1
+            self.advance_cursor()
+            self.advance_column_counter()
 
         return self.doc_nodes
 
@@ -714,7 +711,6 @@ if __name__ == "__main__":
         page = PageLexer(fd)
 
         with open("index.html", "w+") as fd:
-            print("Compiling Page")
             tokens = page.lex_page()
             parser = PageParser(tokens)
             final = parser.render()
@@ -722,7 +718,6 @@ if __name__ == "__main__":
                 for node in page.doc_nodes:
                     print(node)
             print("Nodes Processed:", len(page.doc_nodes))
-            print("Compliation Complete!\n")
             fd.write(final)  # pyright: ignore
 
     sys.exit(0)
