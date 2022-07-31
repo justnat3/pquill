@@ -119,7 +119,7 @@ class PageParser(object):
 
         list_text = text[index_after_depth + 2 :]
 
-        return set(depth, list_text)
+        return (depth, list_text)
 
     def create_ir(self) -> None:
 
@@ -143,7 +143,7 @@ class PageParser(object):
                         ],
                     )
 
-                    node.depth = d
+                    node.depth = depth
                     self.tree.successors.append(node)
 
                     continue
