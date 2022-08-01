@@ -14,7 +14,7 @@ As selfish as it sounds. It was made purely for myself- however it is also inden
 
 ## So.. What does it look like
 
-It looks like my [LWN](https://lwn.net) custom css profile. I read a lot of LWN and like the blog style, oldschool yellow coffee stain pages. 
+It looks similar to my [LWN](https://lwn.net) custom css profile. I read a lot of LWN and like the blog style, eggshell-ish pages. 
 
 ![image](https://user-images.githubusercontent.com/58314490/182042231-0083f9c4-2498-46d7-84ff-a37dbba64209.png)
 
