@@ -1,0 +1,191 @@
+diff --git a/src/core.py b/src/core.py
+index 77aede9..da0e4f5 100755
+--- a/src/core.py
++++ b/src/core.py
+@@ -8,6 +8,9 @@
+ #
+ #   \license    MIT
+ 
++# What I doing right now
++# defer close 
++
+ from dataclasses import dataclass, field
+ from enum import Enum
+ import sys
+@@ -104,6 +107,26 @@ class PageParser(object):
+         self.page: list = []
+         self.tree = DocNode(DocNodeType.root)
+ 
++        # the LIFO queue "defer_queue" is made to close outer-scope tag at the end of render
++        # the way this works is, we have a queue (start)div->div->body   |  (end)div,div,body
++        # queue div,div,body
++        #       and since we want to use pop() we will have to revere the list
++        # queue(reversed) body,div,div
++        #       when we pop it will be div,div,body
++        self.defer_queue = []
++
++    def prepare_lifo(self) -> None:
++        self.defer_queue.reverse()
++
++    def get_next_defer(self) -> object:
++        item = self.defer_queue.pop()
++        print("ITEM", item)
++        return item
++
++    def add_defer_item(self, item: str) -> None:
++        assert isinstance(item, str), "defer item was not str"
++        self.defer_queue.append(item)
++
+     def add_html_block(self, tag) -> None:
+         self.page.append(tag)
+ 
+@@ -121,6 +144,23 @@ class PageParser(object):
+ 
+         return (depth, list_text)
+ 
++    def init_page(self):
++        start_page = (
++            "<head>"
++            + "\n <meta name='viewport' content='width=device-width, initial-scale=1'>"
++            + "\n<link rel='stylesheet' href='../styles/skeleton.css'>"
++            + "\n</head>"
++            + "\n<body class='bod'>"
++        )
++
++        self.add_html_block(start_page)
++        self.add_html_block("<body>")
++        self.add_html_block("<div class='page-container'>")
++
++        # make sure we close this at the end of scope
++        self.add_defer_item("</body>")
++        self.add_defer_item("</div>")
++
+     def create_ir(self) -> None:
+ 
+         for idx, token in enumerate(self.doc_nodes):
+@@ -218,33 +258,16 @@ class PageParser(object):
+ 
+     def render(self) -> str:
+         """
+-        The way we render the page
+-            .. Page Format: as defined below
+-        div* class("pure-grid maincolumn")
+-            div* class("lwn-u-1 pure-u-md-19-24")
+-                PageHeadline
+-                    Starting feature text has no tag or class
+-                div* class("ArticleText")
+-                    Paragraphs
+-                        paragraph tag no class
+-                    Quotes
+-                        blockquote* class("bq")
+-        FUTURE: FeatureByLIne
+-            author
+-            date
+-            TODO: description
+-            Render the page
+-        attrs
+-            none    self
+-        returns
+-            none
++        TODO: redo this 
+         """
+ 
+         self.create_ir()
++        self.init_page()
+ 
+         headline = False
+         for idx, child in enumerate(self.tree.successors):
+-            print("COMPILING    ", hex(id(child)), "  ", child.type)
++            if "-v" in sys.argv:
++                print("COMPILING    ", hex(id(child)), "  ", child.type)
+ 
+             # Headings
+             if child.type is DocNodeType.heading:
+@@ -279,7 +302,8 @@ class PageParser(object):
+                     PageHeadingEnd = "</div>"
+ 
+                     # closing tag at end of scope
+-                    ArticleText = "<div class='ArticleText'>"
++                    self.add_html_block("<div class='ArticleText'>")
++                    self.add_defer_item("</div>")
+ 
+                     heading = f"<h{child.depth}>"
+                     end = f"</h{child.depth}>"
+@@ -294,7 +318,6 @@ class PageParser(object):
+                         + text
+                         + end
+                         + PageHeadingEnd
+-                        + ArticleText
+                     )
+ 
+                     self.add_html_block(line)
+@@ -376,21 +399,16 @@ class PageParser(object):
+             else:
+                 raise ValueError(f"unknown type {child.type}")
+ 
+-        start_page = (
+-            "<head>"
+-            + "\n <meta name='viewport' content='width=device-width, initial-scale=1'>"
+-            + "\n<link rel='stylesheet' href='../styles/skeleton.css'>"
+-            + "\n</head>"
+-            + "\n<body class='bod'>"
+-            + "\n<div>"
+-            + "\n<div>"
+-        )
+-        if headline is True:
+-            end_page = "</div>" + "\n</div>" + "\n</div>" + "\n</div>" + "\n</body>"
+-        else:
+-            "</div>" + "\n</div>" + "\n</body>"
+ 
+-        return start_page + "".join(self.page) + end_page
++        # reverse lifo
++        self.prepare_lifo()
++
++        # finish off page
++        for i in range(0,len(self.defer_queue)):
++            item = self.get_next_defer()
++            self.add_html_block(item)
++
++        return "".join(self.page)
+ 
+ 
+ class PageLexer(object):
+diff --git a/src/index.html b/src/index.html
+index 28c0a0e..e345ab4 100644
+--- a/src/index.html
++++ b/src/index.html
+@@ -2,9 +2,7 @@
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+ <link rel='stylesheet' href='../styles/skeleton.css'>
+ </head>
+-<body class='bod'>
+-<div>
+-<div><div class='PageHeadline'><h1> Writing a Compiler for blogs </h1></div><div class='ArticleText'><h2> Lexing</h2><p>If you are familiar to writing tokenizers, you will recognize that we need to have some form of Typing. Something could be a header, a code_block, a list, or even just some text. We use the following Enum to keep track of that.</p><div class='code_block'><pre>
++<body class='bod'><body><div class='page-container'><div class='ArticleText'><div class='PageHeadline'><h1> Writing a Compiler for blogs </h1></div><h2> Lexing</h2><p>If you are familiar to writing tokenizers, you will recognize that we need to have some form of Typing. Something could be a header, a code_block, a list, or even just some text. We use the following Enum to keep track of that.</p><div class='code_block'><pre>
+ class DocNodeType(Enum):
+ 	list_item_comment = auto()
+ 	root = auto()
+@@ -55,8 +53,4 @@ while True:
+ 	
+ 	# unreachable
+ 	raise
+-</pre></div></div>
+-</div>
+-</div>
+-</div>
+-</body>
+\ No newline at end of file
++</pre></div></body></div></div>
+\ No newline at end of file
+diff --git a/styles/skeleton.css b/styles/skeleton.css
+index cbc231f..1b42512 100644
+--- a/styles/skeleton.css
++++ b/styles/skeleton.css
+@@ -32,7 +32,6 @@ pre {
+ @media only screen and (min-width: 768px){
+     .bod {
+         width: 100%;
+-        overflow: hidden;
+     }
+     DIV.ArticleText {
+         font-size: 8px;

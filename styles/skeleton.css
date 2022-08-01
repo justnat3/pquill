@@ -32,7 +32,6 @@ pre {
 @media only screen and (min-width: 768px){
     .bod {
         width: 100%;
-        overflow: hidden;
     }
     DIV.ArticleText {
         font-size: 8px;

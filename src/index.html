@@ -2,9 +2,7 @@
  <meta name='viewport' content='width=device-width, initial-scale=1'>
 <link rel='stylesheet' href='../styles/skeleton.css'>
 </head>
-<body class='bod'>
-<div>
-<div><div class='PageHeadline'><h1> Writing a Compiler for blogs </h1></div><div class='ArticleText'><h2> Lexing</h2><p>If you are familiar to writing tokenizers, you will recognize that we need to have some form of Typing. Something could be a header, a code_block, a list, or even just some text. We use the following Enum to keep track of that.</p><div class='code_block'><pre>
+<body class='bod'><body><div class='page-container'><div class='ArticleText'><div class='PageHeadline'><h1> Writing a Compiler for blogs </h1></div><h2> Lexing</h2><p>If you are familiar to writing tokenizers, you will recognize that we need to have some form of Typing. Something could be a header, a code_block, a list, or even just some text. We use the following Enum to keep track of that.</p><div class='code_block'><pre>
 class DocNodeType(Enum):
 	list_item_comment = auto()
 	root = auto()
@@ -55,8 +53,4 @@ while True:
 	
 	# unreachable
 	raise
-</pre></div></div>
-</div>
-</div>
-</div>
-</body>
+</pre></div></body></div></div>
