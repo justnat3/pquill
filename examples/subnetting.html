@@ -1,0 +1,19 @@
+<head>
+ <meta name='viewport' content='width=device-width, initial-scale=1'>
+<link rel='stylesheet' href='../styles/skeleton.css'>
+</head>
+<body class='bod'><body><div class='page-container'><h1> Simple and Sane Subnetting Guide (SAG)</h1><h2> What is subnetting?</h2><p>Primarily subnetting is meant to break a very large network into many sub networking (subnetting). I also think that subnetting is useful for saving part of your address space by being able to use more of it.</p><p>The Private Address Space is defined in RFC1918 </p><h2> So how do I do it?</h2><h4> 1. Understanding IP(v4)</h4><p>Out in the wild you will see two things, the address and a mask for that address</p><p>The address isn't entirely special in this case, as long as it conforms to RFC1918. The mask however means quite a lot to how an address is understood by a network, its really the bread and butter of our subnetting.</p><p>Understanding the parts of our mask we have to understand what parts of the mask actually means in subnetting. This is simple, within a byte you may have (ordered) a 1 or a 0. The leading 1's are the NETWORK portion of the mask. The 0's are the HOST portion of the mask.</p><p>Lets say you need 10 sub networks with (172.16.5.0/16)</p><p>how do we break that one network owned by one router (x.x.5.x) into 10</p><ol><li value='1'>First take e</li></ol><div class='code_block'><pre>
+bits to get to 10
++----------------------+
+| 0   0  0  0  1 0 1 0 |
+| 128 64 32 16 8 4 2 1 |
++----------------------+
+</pre></div><ol><li value='1'>Take the mask and add the number of bits needed to get to 5 </li></ol><div class='code_block'><pre>
+11111111.11111111.11111111.11100000 = 255.255.255.224
+</pre></div><div class='code_block'><pre>
+sticking the total number of bits it took to get to 5 to the start of the mask
+-----------------------+
+| 1   1  1  1  0 0 0 0 |
+| 128 64 32 16 8 4 2 1 |
+-----------------------+
+</pre></div><p>this last diagram will end up being your subnet mask</p><ol><li value='1'>you can use the decimal representation of the last significat bit in the mask as an increment for network ranges </li></ol><p>your ranges would be the following</p><p>here is the scope of each of the 5 networks</p><p>the addresses here represent the START of the subnet</p><ol><li value='1'>68.5.32</li><li value='2'>68.5.64</li><li value='2'>68.5.96</li><li value='2'>68.5.128</li><li value='2'>68.5.160</li></ol><p>etc -> ~255</p><p>here are the real ranges</p><ol><li value='1'>68.5.0   - 192.168.5.31</li><li value='2'>68.5.32  - 192.168.5.63</li><li value='2'>68.5.64  - 192.168.5.127</li><li value='2'>68.5.128 - 192.168.5.159</li><li value='3'>the start and end of the ranges are unusable</li></ol><p>this is because these are networks, they need a network address, and a broadcast</p><p>so here are the usable</p><ol><li value='1'>68.5.1   - 192.168.5.30</li><li value='2'>68.5.31  - 192.168.5.62</li><li value='2'>68.5.65  - 192.168.5.126</li><li value='2'>68.5.129 - 192.168.5.158</li></ol><p>and of course as mentioned above the mask for all of these are 255.255.255.224</p><p>or /27</p></body></div>

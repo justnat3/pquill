@@ -8,8 +8,6 @@
 #
 #   \license    MIT
 
-# What I doing right now
-# defer close 
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -25,6 +23,7 @@ class DocNodeType(Enum):
     comment = object()
     heading = object()
     newline = object()
+    anchor = object()
     _list = object()
     text = object()
     tab = object()
@@ -120,7 +119,6 @@ class PageParser(object):
 
     def get_next_defer(self) -> object:
         item = self.defer_queue.pop()
-        print("ITEM", item)
         return item
 
     def add_defer_item(self, item: str) -> None:
@@ -133,7 +131,7 @@ class PageParser(object):
     def create_html_block(self, start, body, end) -> None:
         return start + body + end
 
-    def define_list_item(self, text):
+    def define_list_item(self, text) -> None:
         index_after_depth = text.index(".")
         depth = int(text[0])
 
@@ -167,7 +165,7 @@ class PageParser(object):
             if token.type is DocNodeType.list_item:
 
                 # if the we don't already have a list in the tree
-                # then go ahead and create one 
+                # then go ahead and create one
                 if self.tree.successors[-1].type is not DocNodeType._list:
 
                     # grab the depth and the text for the list item
@@ -189,7 +187,7 @@ class PageParser(object):
                     continue
 
                 # if we dont need to create the head of the list
-                # then we can append to the _list behind it 
+                # then we can append to the _list behind it
                 elif token.type is DocNodeType.list_item:
 
                     # grab the depth and the text for the list item
@@ -217,6 +215,7 @@ class PageParser(object):
 
             elif token.type is DocNodeType.heading:
                 depth = token.value.count("#")
+                print("DEPTH", depth, token.value)
 
                 # here like we mentioned later in the file we can strip out the "#"
                 # we dont strip it when we translate the header into HTML because
@@ -229,6 +228,7 @@ class PageParser(object):
                         )
                     ],
                 )
+
                 self.tree.successors.append(node)
                 continue
 
@@ -258,7 +258,7 @@ class PageParser(object):
 
     def render(self) -> str:
         """
-        TODO: redo this 
+        TODO: redo this
         """
 
         self.create_ir()
@@ -280,24 +280,22 @@ class PageParser(object):
                     child.successors[0], DocNode
                 ), f"Could not find successors Text for Header of depth {child.depth}"
 
-                # TODO: fix header depth
-                if headline is True and child.depth == 1:
-                    # bad fix for subheaders
-                    child.depth += 1
+                text = child.successors[0]
 
-                    text = child.successors[0].text
+                if text.depth == 1:
 
+                    #TODO: fix text.text naming wat
                     line = self.create_html_block(
-                        f"<h{child.depth}>",
-                        text,
-                        f"</h{child.depth}>",
+                        f"<h{text.depth}>",
+                        text.text,
+                        f"</h{text.depth}>",
                     )
 
                     self.add_html_block(line)
 
                     continue
 
-                if child.depth == 1:
+                if text.depth == 1:
                     PageHeading = "<div class='PageHeadline'>"
                     PageHeadingEnd = "</div>"
 
@@ -305,28 +303,18 @@ class PageParser(object):
                     self.add_html_block("<div class='ArticleText'>")
                     self.add_defer_item("</div>")
 
-                    heading = f"<h{child.depth}>"
-                    end = f"</h{child.depth}>"
+                    heading = f"<h{text.depth}>"
+                    end = f"</h{text.depth}>"
 
-                    # set headline state
-                    headline = True
-
-                    text = child.successors[0].text
-                    line = (
-                        PageHeading
-                        + heading
-                        + text
-                        + end
-                        + PageHeadingEnd
-                    )
+                    line = PageHeading + heading + text.text + end + PageHeadingEnd
 
                     self.add_html_block(line)
                     continue
 
                 line = self.create_html_block(
-                    f"<h{child.depth}>",
+                    f"<h{text.depth}>",
                     child.successors[0].text,
-                    f"</h{child.depth}>",
+                    f"</h{text.depth}>",
                 )
 
                 self.add_html_block(line)
@@ -385,11 +373,9 @@ class PageParser(object):
                     "</pre>",
                 )
 
-                # wrap code block in div 
+                # wrap code block in div
                 line = self.create_html_block(
-                    "<div class='code_block'>",
-                    line,
-                    "</div>"
+                    "<div class='code_block'>", line, "</div>"
                 )
 
                 self.add_html_block(line)
@@ -399,12 +385,11 @@ class PageParser(object):
             else:
                 raise ValueError(f"unknown type {child.type}")
 
-
         # reverse lifo
         self.prepare_lifo()
 
         # finish off page
-        for i in range(0,len(self.defer_queue)):
+        for i in range(0, len(self.defer_queue)):
             item = self.get_next_defer()
             self.add_html_block(item)
 
@@ -413,7 +398,7 @@ class PageParser(object):
 
 class PageLexer(object):
     """
-    our global parser object
+    our global lexer object
     lookahead_ptr   a pointer to look ahead of the cursor temporarily
     _has_errors     defining what the parser ran into during scans
     file_buff       text from the source file
@@ -434,24 +419,43 @@ class PageLexer(object):
         self.column = 0
         self.line = 0
 
-    def check_lookahead_bounds(self) -> bool:
-        return (
-            True if (self.lookahead_ptr + self.cursor >= len(self.file_buff)) else False
-        )
+    def parse_between_chars(self, string: str, start: str, end: str) -> str:
+        """
+            I only need to support 1 chacter indexing
+        """
+        assert isinstance(start), "start is not a string"
+        assert isinstance(end), "end is not a string"
+        assert isinstance(string), "string is not a string"
 
-    def check_bound_with_int(self, control: int) -> bool:
-        return True if control >= len(self.file_buff) else False
+        try:
+            start_index = string.index(start)
+            end_index = string.index(end)
+
+            return string[start_index+1:end_index+1]
+
+        except:
+            raise ValueError(f"Char Not Found {start},{end}")
 
     def check_lookahead_for_newline(self) -> bool:
         return (
             True if self.file_buff[self.cursor + self.lookahead_ptr] == "\n" else False
         )
 
-    def advance_line_counter(self, amount=1) -> None:
-        self.line += amount
+    def check_lookahead_bounds(self) -> bool:
+        return (
+            True if (self.lookahead_ptr + self.cursor >= len(self.file_buff)) else False
+        )
 
     def advance_column_counter(self, amount=1) -> None:
         self.column += amount
+
+    def check_bound_with_int(self, control: int) -> bool:
+        return True if control >= len(self.file_buff) else False
+
+
+    def advance_line_counter(self, amount=1) -> None:
+        self.line += amount
+
 
     def advance_cursor(self, amount=1) -> None:
         assert amount != 0, "cannot move cursor 0"
@@ -496,7 +500,7 @@ class PageLexer(object):
                 # grab the last char
                 result.append(self.file_buff[-1])
 
-                # advance cursor and reset column counter 
+                # advance cursor and reset column counter
                 self.advance_line_counter()
                 self.column = 0
 
@@ -685,6 +689,11 @@ class PageLexer(object):
                     # here we reuse the size of the node to specify the list item value
                     self.add_token(DocNodeType["list_item"], item)
 
+            #elif char == "[":
+                # check for ()
+                
+                # check for next ]
+
             elif char == "-":
                 if self.peek_width(2) == "//":
                     # grab that comment
@@ -730,10 +739,11 @@ class PageLexer(object):
 
 
 if __name__ == "__main__":
-    with open("../examples/compiler.md", "r") as fd:
+    # argv[1] because the first arg is the program name I imagine to prevent underflow
+    with open(sys.argv[1], "r") as fd:
         page = PageLexer(fd)
 
-        with open("index.html", "w+") as fd:
+        with open(sys.argv[2], "w+") as fd:
             tokens = page.lex_page()
             parser = PageParser(tokens)
             final = parser.render()
