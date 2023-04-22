@@ -739,7 +739,6 @@ class PageLexer(object):
 
 
 if __name__ == "__main__":
-    # argv[1] because the first arg is the program name I imagine to prevent underflow
     with open(sys.argv[1], "r") as fd:
         page = PageLexer(fd)
 
